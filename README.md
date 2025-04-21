@@ -41,5 +41,33 @@ To start local development with hot reloading:
    APP_ENV=local
    DEBUG=true
    PORT=8080
+   ```
 3. **Run the application using Docker Compose:**
-    `docker-compose up --build`
+    `docker-compose -f docker-compose.local.yml up --build`
+4. **Stop application using Docker Compose:**
+    `docker componse -f docker-compose.local.yml down`
+
+5. **To rebuild a single service:**
+    `docker-compose -f docker-compose.prod.yml up -d --build api`
+    
+### Production Build
+
+To build a production-ready image:
+
+1. **Configure your production environment variables:**
+    Create a `.env.production` file in the root directory with variables like:
+    ```env
+    APP_ENV=production
+    DEBUG=false
+    PORT=8080
+    ```
+2. **Build the production image using Docker:**
+
+    `docker build --target prod -t infinite-experiment-backend:latest .`
+
+3. **Deploy the production container:**
+
+    docker run -p 8080:8080 infinite-experiment-backend:latest
+
+    Alternatively, push this image to a container registry and deploy it on your target VM or cloud platform.
+

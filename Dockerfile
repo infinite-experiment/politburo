@@ -1,47 +1,46 @@
-# Stage 1: Builder Stage
+# Stage 1: Builder
 FROM golang:1.23-alpine AS builder
 WORKDIR /app
 
-# Install Git (required for 'go install')
+# Install Git (needed for go install of air)
 RUN apk add --no-cache git
 
-# Copy dependency files and download dependencies
+# Copy Go mod files and download dependencies
 COPY go.mod go.sum ./
 RUN go mod download
 
-# Copy the rest of the source code
+# Copy the entire source code (includes cmd/, internal/, pkg/, etc.)
 COPY . .
 
-# Install Air for hot reloading (Air will be installed in /go/bin/air by default)
-RUN go install github.com/cosmtrek/air@latest
+# Install Air for hot reloading
+RUN go install github.com/air-verse/air@latest
 
-# Build the production binary (compiled without Air)
-RUN CGO_ENABLED=0 GOOS=linux go build -o /app/bin/app ./app
+# Build binary for production
+RUN CGO_ENABLED=0 GOOS=linux go build -o /app/bin/app ./cmd/server
 
-# Stage 2: Development Image (with Hot Reload)
+# Stage 2: Development with Air
 FROM golang:1.23-alpine AS dev
 WORKDIR /app
 
-# Copy Air binary from the builder stage
+# Copy Air binary from builder
 COPY --from=builder /go/bin/air /usr/local/bin/air
 
-# Copy source code (this will be overridden by docker-compose volume mount)
+# Copy source code (this will be overridden by the volume in docker-compose)
 COPY . .
 
 EXPOSE 8080
 
-# Use Air as the entrypoint for hot reloading
+# Entrypoint for dev
 CMD ["air"]
 
 # Stage 3: Production Image
 FROM alpine:latest AS prod
 RUN apk --no-cache add ca-certificates
-WORKDIR /root/
 
-# Copy the compiled binary from the builder stage
+WORKDIR /root/
 COPY --from=builder /app/bin/app .
 
-# Optionally copy production environment file into the image
+# Optionally copy prod .env
 COPY .env.production .env
 
 EXPOSE 8080
