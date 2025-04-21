@@ -1,0 +1,41 @@
+# Go build artifacts
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Go workspace stuff
+bin/
+pkg/
+tmp/
+*.log
+
+# Dependency directories (for modules and vendoring)
+vendor/
+
+# IDE/editor config files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Environment files
+.env*
+.envrc
+
+# Logs
+*.log
+logs/
+
+# Coverage/testing
+coverage.*
+*.coverprofile
+
+# Swagger generated

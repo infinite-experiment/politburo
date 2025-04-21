@@ -1,0 +1,78 @@
+basePath: /
+definitions:
+  dtos.UserRegisterSwaggerResponse:
+    properties:
+      data:
+        $ref: '#/definitions/responses.UserRegisterResponse'
+      error:
+        type: string
+      status:
+        type: string
+      timestamp:
+        type: string
+    type: object
+  requests.RegisterUserRequest:
+    properties:
+      discord_id:
+        type: string
+      if_community_id:
+        type: string
+      server_id:
+        type: string
+    required:
+    - discord_id
+    - if_community_id
+    - server_id
+    type: object
+  responses.UserRegisterResponse:
+    properties:
+      error:
+        type: string
+      status:
+        type: boolean
+    type: object
+host: localhost:8080
+info:
+  contact:
+    email: sanket@example.com
+    name: Sanket Pandia
+  description: Backend for Infinite Experiment bot and web client.
+  title: Infinite Experiment API
+  version: "1.0"
+paths:
+  /api/v1/user/register:
+    post:
+      consumes:
+      - application/json
+      description: Creates a new user with Discord ID and IF Community username.
+      parameters:
+      - description: User Registration Payload
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/requests.RegisterUserRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dtos.UserRegisterSwaggerResponse'
+        "400":
+          description: Bad Request
+      summary: Register a new user
+      tags:
+      - Users
+  /healthCheck:
+    get:
+      description: Verifies the server is running.
+      responses:
+        "200":
+          description: ok
+          schema:
+            type: string
+      summary: Health check
+      tags:
+      - Misc
+swagger: "2.0"
