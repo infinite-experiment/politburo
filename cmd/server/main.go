@@ -3,6 +3,7 @@ package main
 import (
 	"infinite-experiment/infinite-experiment-backend/internal/db"
 	"infinite-experiment/infinite-experiment-backend/internal/routes"
+	"infinite-experiment/infinite-experiment-backend/pkg/queries"
 	"log"
 	"net/http"
 
@@ -18,11 +19,20 @@ import (
 // @BasePath /
 func main() {
 
+	// Connect to DB
 	if err := db.InitPostgres(); err != nil {
 		log.Fatalf("❌ Failed to connect to Postgres: %v", err)
 	}
 
 	log.Println("✅ Connected to Postgres!")
+
+	// Load Queries
+	err := queries.LoadAll()
+	if err != nil {
+		log.Fatalf("Failed to load queries: %v", err)
+	}
+	log.Println("Queries loaded!")
+
 	router := routes.RegisterRoutes()
 
 	log.Println("Starting server on :8080")

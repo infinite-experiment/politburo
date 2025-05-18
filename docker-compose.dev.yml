@@ -25,7 +25,19 @@ services:
     volumes:
       - pgdata-dev:/var/lib/postgresql/data
     ports:
-      - ":5432"
+      - "5432:5432"
+  
+  pgadmin:
+    image: dpage/pgadmin4
+    restart: always
+    environment:
+      PGADMIN_DEFAULT_EMAIL: sanketpandia@gmail.com
+      PGADMIN_DEFAULT_PASSWORD: ieadmin
+    ports:
+      - "5050:80"
+    depends_on:
+      - db
+
 
 volumes:
   pgdata-dev:

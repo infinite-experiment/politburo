@@ -33,3 +33,19 @@ func (r *UserRepository) InsertUser(ctx context.Context, user *entities.User) er
 		user.IsActive,
 	).StructScan(user)
 }
+
+func (r *UserRepository) FindUserByDiscordId(ctx context.Context, discordId string) (*entities.User, error) {
+
+	query := `
+		SELECT * FROM users where  
+		discordId = $1
+	`
+	var user entities.User
+
+	err := r.db.QueryRowxContext(ctx, query, discordId).StructScan(&user)
+	if err != nil {
+		return nil, err
+	}
+
+	return &user, nil
+}
