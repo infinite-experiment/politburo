@@ -3,9 +3,9 @@ package main
 import (
 	"infinite-experiment/infinite-experiment-backend/internal/db"
 	"infinite-experiment/infinite-experiment-backend/internal/routes"
-	"infinite-experiment/infinite-experiment-backend/pkg/queries"
 	"log"
 	"net/http"
+	"time"
 
 	_ "infinite-experiment/infinite-experiment-backend/docs"
 )
@@ -24,16 +24,11 @@ func main() {
 		log.Fatalf("❌ Failed to connect to Postgres: %v", err)
 	}
 
+	var upSince = time.Now()
+
 	log.Println("✅ Connected to Postgres!")
 
-	// Load Queries
-	err := queries.LoadAll()
-	if err != nil {
-		log.Fatalf("Failed to load queries: %v", err)
-	}
-	log.Println("Queries loaded!")
-
-	router := routes.RegisterRoutes()
+	router := routes.RegisterRoutes(upSince)
 
 	log.Println("Starting server on :8080")
 	log.Fatal(http.ListenAndServe(":8080", router))

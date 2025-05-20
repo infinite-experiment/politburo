@@ -1,0 +1,15 @@
+root = "."
+tmp_dir = "tmp"
+
+[build]
+  cmd = "go build -o app/tmp/main app/cmd/server"
+  bin = "app/tmp/main"
+  full_bin = "false"
+  delay = 1000 # ms
+
+[include]
+  directories = ["internal", "cmd"]
+  extensions = ["go", "tpl", "tmpl", "html"]
+
+[exclude]
+  directories = ["tmp", "bin", "vendor"]

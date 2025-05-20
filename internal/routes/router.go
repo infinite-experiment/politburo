@@ -6,12 +6,13 @@ import (
 	"infinite-experiment/infinite-experiment-backend/internal/db/repositories"
 	"infinite-experiment/infinite-experiment-backend/internal/services"
 	"net/http"
+	"time"
 
 	"github.com/gorilla/mux"
 	httpSwagger "github.com/swaggo/http-swagger"
 )
 
-func RegisterRoutes() http.Handler {
+func RegisterRoutes(upSince time.Time) http.Handler {
 	r := mux.NewRouter()
 
 	// TODO: Add Middlewares
@@ -19,9 +20,10 @@ func RegisterRoutes() http.Handler {
 	// r.Use(middleware.RateLimitMiddleware)
 
 	userRepo := repositories.NewUserRepository(db.DB)
+	// userService := services.NewUserService(userRepo)
 	api.SetUserService(services.NewUserService(userRepo))
 
-	r.HandleFunc("/healthCheck", api.HealthCheckHandler).Methods("GET")
+	r.HandleFunc("/healthCheck", api.HealthCheckHandler(db.DB, upSince)).Methods("GET")
 
 	r.PathPrefix("/swagger/").Handler(httpSwagger.WrapHandler)
 
