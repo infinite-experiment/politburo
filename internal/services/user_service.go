@@ -2,8 +2,8 @@ package services
 
 import (
 	"context"
-	"infinite-experiment/infinite-experiment-backend/internal/db/repositories"
-	"infinite-experiment/infinite-experiment-backend/internal/models/entities"
+	"infinite-experiment/politburo/internal/db/repositories"
+	"infinite-experiment/politburo/internal/models/entities"
 )
 
 type UserService struct {

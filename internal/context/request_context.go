@@ -2,7 +2,7 @@ package context
 
 import (
 	"context"
-	"infinite-experiment/infinite-experiment-backend/internal/auth"
+	"infinite-experiment/politburo/internal/auth"
 )
 
 type contextKey string

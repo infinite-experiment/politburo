@@ -50,7 +50,72 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request"
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/dtos.UserRegisterSwaggerResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/user/register/init": {
+            "post": {
+                "description": "Initiates the user registration process given an IF Community ID (IFC ID).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Users"
+                ],
+                "summary": "Initiate user registration",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Discord ID",
+                        "name": "X-Discord-Id",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "default": "123456789",
+                        "description": "Discord Server ID",
+                        "name": "X-Server-Id",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "API KEY",
+                        "name": "X-API-Key",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "IFC ID Payload",
+                        "name": "input",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/api.InitUserRegistrationReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dtos.APIResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/dtos.APIResponse"
+                        }
                     }
                 }
             }
@@ -74,6 +139,29 @@ const docTemplate = `{
         }
     },
     "definitions": {
+        "api.InitUserRegistrationReq": {
+            "type": "object",
+            "properties": {
+                "ifc_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "dtos.APIResponse": {
+            "type": "object",
+            "properties": {
+                "data": {},
+                "message": {
+                    "type": "string"
+                },
+                "response_time": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                }
+            }
+        },
         "dtos.UserRegisterSwaggerResponse": {
             "type": "object",
             "properties": {

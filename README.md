@@ -63,11 +63,11 @@ To build a production-ready image:
     ```
 2. **Build the production image using Docker:**
 
-    `docker build --target prod -t infinite-experiment-backend:latest .`
+    `docker build --target prod -t politburo:latest .`
 
 3. **Deploy the production container:**
 
-    docker run -p 8080:8080 infinite-experiment-backend:latest
+    docker run -p 8080:8080 politburo:latest
 
     Alternatively, push this image to a container registry and deploy it on your target VM or cloud platform.
 

@@ -3,6 +3,7 @@ package db
 import (
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
@@ -20,10 +21,14 @@ func InitPostgres() error {
 	dsn := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable", user, password, host, port, dbname)
 
 	var err error
-	DB, err = sqlx.Connect("postgres", dsn)
-	if err != nil {
-		return err
-	}
 
-	return nil
+	for i := 0; i < 10; i++ {
+		DB, err = sqlx.Connect("postgres", dsn)
+		if err == nil {
+			return nil
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+	return err
+
 }

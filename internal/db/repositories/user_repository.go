@@ -3,7 +3,8 @@ package repositories
 import (
 	"context"
 
-	"infinite-experiment/infinite-experiment-backend/internal/models/entities"
+	"infinite-experiment/politburo/internal/constants"
+	"infinite-experiment/politburo/internal/models/entities"
 
 	"github.com/jmoiron/sqlx"
 )
@@ -36,13 +37,9 @@ func (r *UserRepository) InsertUser(ctx context.Context, user *entities.User) er
 
 func (r *UserRepository) FindUserByDiscordId(ctx context.Context, discordId string) (*entities.User, error) {
 
-	query := `
-		SELECT * FROM users where  
-		discordId = $1
-	`
 	var user entities.User
 
-	err := r.db.QueryRowxContext(ctx, query, discordId).StructScan(&user)
+	err := r.db.QueryRowxContext(ctx, constants.GetUserByDiscordId, discordId).StructScan(&user)
 	if err != nil {
 		return nil, err
 	}

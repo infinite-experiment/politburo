@@ -3,11 +3,14 @@ package api
 import (
 	"encoding/json"
 	"net/http"
+	"time"
 
-	"infinite-experiment/infinite-experiment-backend/internal/models/dtos/requests"
-	"infinite-experiment/infinite-experiment-backend/internal/models/dtos/responses"
-	"infinite-experiment/infinite-experiment-backend/internal/models/entities"
-	"infinite-experiment/infinite-experiment-backend/internal/services"
+	"infinite-experiment/politburo/internal/constants"
+	"infinite-experiment/politburo/internal/models/dtos"
+	"infinite-experiment/politburo/internal/models/dtos/requests"
+	"infinite-experiment/politburo/internal/models/dtos/responses"
+	"infinite-experiment/politburo/internal/models/entities"
+	"infinite-experiment/politburo/internal/services"
 )
 
 var userService *services.UserService
@@ -58,4 +61,64 @@ func RegisterUserHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	respondWithSuccess(w, http.StatusOK, &resp)
+}
+
+type InitUserRegistrationReq struct {
+	IfcId string `json:"ifc_id"`
+}
+
+// InitUserRegistrationHandler handles POST /api/v1/user/register/init
+//
+// @Summary      Initiate user registration
+// @Description  Initiates the user registration process given an IF Community ID (IFC ID).
+// @Tags         Users
+// @Accept       json
+// @Produce      json
+// @Param X-Discord-Id header string true "Discord ID"
+// @Param X-Server-Id header string true "Discord Server ID"  default(123456789)
+// @Param X-API-Key header string true "API KEY"
+// @Param        input  body      InitUserRegistrationReq  true  "IFC ID Payload"
+// @Success      200    {object}  dtos.APIResponse
+// @Failure      400    {object}  dtos.APIResponse
+// @Router       /api/v1/user/register/init [post]
+func InitUserRegistrationHandler(regService *services.RegistrationService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+
+		initTime := time.Now()
+		var req InitUserRegistrationReq
+
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.IfcId == "" {
+
+			resp := dtos.APIResponse{
+				Status:       string(constants.APIStatusError),
+				Message:      "Invalid IFC ID Received",
+				ResponseTime: services.GetResponseTime(initTime),
+			}
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(resp)
+			return
+		}
+
+		apiResp, _, err := regService.InitUserRegistration(r.Context(), req.IfcId)
+		if err != nil {
+			resp := dtos.APIResponse{
+				Status:       string(constants.APIStatusError),
+				Message:      "Failed to process",
+				ResponseTime: services.GetResponseTime(initTime),
+			}
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(resp)
+			return
+		}
+
+		resp := dtos.APIResponse{
+			Status:       string(constants.APIStatusOk),
+			Message:      "Initiated",
+			ResponseTime: services.GetResponseTime(initTime),
+			Data:         apiResp,
+		}
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(resp)
+
+	}
 }

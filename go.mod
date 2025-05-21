@@ -1,4 +1,4 @@
-module infinite-experiment/infinite-experiment-backend
+module infinite-experiment/politburo
 
 go 1.23.5
 
@@ -17,6 +17,7 @@ require (
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/lib/pq v1.10.9 // indirect
 	github.com/mailru/easyjson v0.9.0 // indirect
+	github.com/patrickmn/go-cache v2.1.0+incompatible // indirect
 	github.com/swaggo/files v1.0.1 // indirect
 	github.com/swaggo/http-swagger v1.3.4 // indirect
 	github.com/swaggo/swag v1.16.4 // indirect

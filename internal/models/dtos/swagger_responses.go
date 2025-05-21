@@ -1,7 +1,7 @@
 package dtos
 
 import (
-	"infinite-experiment/infinite-experiment-backend/internal/models/dtos/responses"
+	"infinite-experiment/politburo/internal/models/dtos/responses"
 )
 
 // UserRegisterSwaggerResponse wraps the actual response inside your API response format.

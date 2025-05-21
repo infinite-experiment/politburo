@@ -1,0 +1,5 @@
+# .dockerignore
+tmp
+bin
+vendor
+.git

@@ -1,13 +1,15 @@
 package main
 
 import (
-	"infinite-experiment/infinite-experiment-backend/internal/db"
-	"infinite-experiment/infinite-experiment-backend/internal/routes"
+	"infinite-experiment/politburo/internal/db"
+	"infinite-experiment/politburo/internal/middleware"
+	"infinite-experiment/politburo/internal/routes"
 	"log"
 	"net/http"
+	"os"
 	"time"
 
-	_ "infinite-experiment/infinite-experiment-backend/docs"
+	_ "infinite-experiment/politburo/docs"
 )
 
 // @title Infinite Experiment API
@@ -19,17 +21,19 @@ import (
 // @BasePath /
 func main() {
 
+	log.SetOutput(os.Stdout)
+	log.SetFlags(log.LstdFlags | log.Lshortfile)
 	// Connect to DB
 	if err := db.InitPostgres(); err != nil {
 		log.Fatalf("❌ Failed to connect to Postgres: %v", err)
 	}
 
 	var upSince = time.Now()
-
 	log.Println("✅ Connected to Postgres!")
 
 	router := routes.RegisterRoutes(upSince)
+	loggedRouter := middleware.Logging(router)
 
 	log.Println("Starting server on :8080")
-	log.Fatal(http.ListenAndServe(":8080", router))
+	log.Fatal(http.ListenAndServe(":8080", loggedRouter))
 }

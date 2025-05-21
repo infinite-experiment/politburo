@@ -1,15 +1,19 @@
-root = "."
-tmp_dir = "tmp"
+# air.toml  (or .air.toml, but match your command)
+root    = "."
+tmp_dir = ".air_tmp"
 
 [build]
-  cmd = "go build -o app/tmp/main app/cmd/server"
-  bin = "app/tmp/main"
-  full_bin = "false"
-  delay = 1000 # ms
+  cmd      = "go build -o .air_tmp/main ./cmd/server"
+  bin      = ".air_tmp/main"
+  full_bin = true     # <- boolean, no quotes
+
+[log]
+  main_only = false   # <- boolean, no quotes
+  time      = true    # <- boolean, no quotes
 
 [include]
-  directories = ["internal", "cmd"]
-  extensions = ["go", "tpl", "tmpl", "html"]
+  directories = ["internal","cmd"]
+  extensions  = ["go","tpl","tmpl","html"]
 
 [exclude]
-  directories = ["tmp", "bin", "vendor"]
+  directories = ["vendor",".air_tmp"]

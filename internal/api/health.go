@@ -2,7 +2,7 @@ package api
 
 import (
 	"encoding/json"
-	"infinite-experiment/infinite-experiment-backend/internal/models/entities"
+	"infinite-experiment/politburo/internal/models/entities"
 	"net/http"
 	"time"
 
