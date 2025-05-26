@@ -100,7 +100,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/api.InitUserRegistrationReq"
+                            "$ref": "#/definitions/dtos.InitUserRegistrationReq"
                         }
                     }
                 ],
@@ -113,6 +113,52 @@ const docTemplate = `{
                     },
                     "400": {
                         "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/dtos.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/users/delete": {
+            "get": {
+                "description": "Deletes all users in the database. Intended for development/testing only.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Test"
+                ],
+                "summary": "Delete all users (Test Only)",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "default": "668664447950127154",
+                        "description": "Discord ID",
+                        "name": "X-Discord-Id",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "default": "988020008665882624",
+                        "description": "Discord Server ID",
+                        "name": "X-Server-Id",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "default": "API_KEY_123",
+                        "description": "API KEY",
+                        "name": "X-API-Key",
+                        "in": "header",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "400": {
+                        "description": "Always returns error; not implemented for production use",
                         "schema": {
                             "$ref": "#/definitions/dtos.APIResponse"
                         }
@@ -139,14 +185,6 @@ const docTemplate = `{
         }
     },
     "definitions": {
-        "api.InitUserRegistrationReq": {
-            "type": "object",
-            "properties": {
-                "ifc_id": {
-                    "type": "string"
-                }
-            }
-        },
         "dtos.APIResponse": {
             "type": "object",
             "properties": {
@@ -158,6 +196,17 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "status": {
+                    "type": "string"
+                }
+            }
+        },
+        "dtos.InitUserRegistrationReq": {
+            "type": "object",
+            "properties": {
+                "ifc_id": {
+                    "type": "string"
+                },
+                "last_flight": {
                     "type": "string"
                 }
             }

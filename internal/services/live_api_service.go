@@ -1,10 +1,14 @@
 package services
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"log"
 	"net/http"
+	"net/http/httputil"
 	"os"
 	"time"
 
@@ -44,6 +48,10 @@ func (svc *LiveAPIService) doGET(endpoint string, result interface{}) (int, erro
 	if err != nil {
 		return 0, err
 	}
+
+	log.Printf("%v", req)
+	log.Printf("%v", svc.BaseURL+endpoint)
+
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusNotFound {
@@ -56,10 +64,83 @@ func (svc *LiveAPIService) doGET(endpoint string, result interface{}) (int, erro
 	return resp.StatusCode, json.NewDecoder(resp.Body).Decode(result)
 }
 
+func (svc *LiveAPIService) doPost(
+	endpoint string,
+	payload interface{},
+	result interface{},
+) (int, error) {
+	// 1) serialize body
+	buf := &bytes.Buffer{}
+	if err := json.NewEncoder(buf).Encode(payload); err != nil {
+		return 0, err
+	}
+
+	// 2) build request
+	req, err := http.NewRequest("POST", svc.BaseURL+endpoint, buf)
+	if err != nil {
+		return 0, err
+	}
+	req.Header.Set("Authorization", "Bearer "+svc.APIKey)
+	req.Header.Set("Content-Type", "application/json")
+
+	// 3) log full request
+	if dumpReq, err := httputil.DumpRequestOut(req, true); err == nil {
+		log.Printf("→ HTTP Request:\n%s\n", dumpReq)
+	} else {
+		log.Printf("→ Request dump error: %v\n", err)
+	}
+
+	// 4) do request
+	resp, err := svc.Client.Do(req)
+	if err != nil {
+		return 0, err
+	}
+	defer resp.Body.Close()
+
+	// 5) log headers (no body)
+	if dumpRespHeader, err := httputil.DumpResponse(resp, false); err == nil {
+		log.Printf("← HTTP Response Headers:\n%s\n", dumpRespHeader)
+	}
+
+	// 6) read & log body
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return resp.StatusCode, err
+	}
+	log.Printf("← HTTP Response Body:\n%s\n", string(bodyBytes))
+
+	// 7) restore Body for JSON decode
+	resp.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+
+	// 8) status check + unmarshal
+	switch resp.StatusCode {
+	case http.StatusOK:
+		return resp.StatusCode, json.NewDecoder(resp.Body).Decode(result)
+	case http.StatusNotFound:
+		return resp.StatusCode, errors.New("resource not found")
+	default:
+		return resp.StatusCode, fmt.Errorf("unexpected status %d", resp.StatusCode)
+	}
+}
+
 // User Grade
 func (svc *LiveAPIService) GetUserGrade(userID string) (*dtos.UserGradeResponse, int, error) {
 	var r dtos.UserGradeResponse
 	status, err := svc.doGET("/user/grade/"+userID, &r)
+	if err != nil {
+		return nil, status, err
+	}
+	return &r, status, nil
+}
+
+func (svc *LiveAPIService) GetUserByIfcId(ifcId string) (*dtos.UserStatsResponse, int, error) {
+	var (
+		r dtos.UserStatsResponse
+	)
+	reqBody := dtos.LiveApiUserStatsReq{
+		DiscourseNames: []string{ifcId},
+	}
+	status, err := svc.doPost("/users", reqBody, &r)
 	if err != nil {
 		return nil, status, err
 	}
@@ -106,14 +187,21 @@ func (svc *LiveAPIService) GetAircraftLiveries() (*dtos.AircraftLiveriesResponse
 	return &r, status, nil
 }
 
+/**
+GET https://api.infiniteflight.com/public/v2/users/813ef838-f55f-40ba-99a1-594c4c28c86f/flights?page=1
+Authorization: Bearer ml2i201zuwx48fra1dj5gexd1kbjq10t
+*/
 // User Flights
-func (svc *LiveAPIService) GetUserFlights(userID string) (*dtos.UserFlightsResponse, int, error) {
-	var r dtos.UserFlightsResponse
-	status, err := svc.doGET("/user/flights/"+userID, &r)
+func (svc *LiveAPIService) GetUserFlights(userID string, page int) (*dtos.UserFlightsResponse, int, error) {
+	var r dtos.UserFlightsRawResponse
+	status, err := svc.doGET("/users/"+userID+"/flights?page="+fmt.Sprint(page), &r)
 	if err != nil {
+		log.Print("---------Flights log-------------")
+		log.Printf("Params: %s -> %d \n%v \n %v", userID, page, status, err)
+		log.Print("---------Flights log-------------")
 		return nil, status, err
 	}
-	return &r, status, nil
+	return &r.Result, status, nil
 }
 
 // World Status

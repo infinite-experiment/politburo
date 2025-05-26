@@ -12,11 +12,10 @@ func MakeClaimsFromApi(ctx context.Context, repo *repositories.UserRepository, s
 	user, err := repo.FindUserByDiscordId(ctx, userId)
 	if err != nil {
 		log.Print(err.Error())
-		return nil
 	}
-	log.Printf("CreateUser called with discordID=%q username=%q", serverId, userId)
-	log.Printf("CreateUser called with discordID=%q username=%q", *user.UserName, user.ID)
+	log.Printf("CreateUser called with discordID=%q ", serverId)
 
+	log.Printf("DB Query response: %v", user)
 	return &APIKeyClaims{
 		UserIDValue:   userId,
 		ServerIDValue: serverId,

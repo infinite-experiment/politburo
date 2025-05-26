@@ -2,20 +2,35 @@ package dtos
 
 import "time"
 
+// dtos/user_stats.go
 type UserStatsResponse struct {
-	UserID             string  `json:"UserID"`
-	XP                 int     `json:"XP"`
-	FlightTime         float64 `json:"FlightTime"`
-	Landings           int     `json:"Landings"`
-	Violations         int     `json:"Violations"`
-	Reports            int     `json:"Reports"`
-	ATCOperations      int     `json:"ATCOperations"`
-	VirtualAirline     string  `json:"VirtualAirline"`
-	Grade              int     `json:"Grade"`
-	LastFlight         string  `json:"LastFlight"` // Or time.Time if you want
-	OnlineFlights      int     `json:"OnlineFlights"`
-	LandingCount90Days int     `json:"LandingCount90Days"`
-	// Add other fields as needed from the API response
+	ErrorCode int         `json:"errorCode"`
+	Result    []UserStats `json:"result"`
+}
+
+type UserStats struct {
+	OnlineFlights         int                   `json:"onlineFlights"`
+	Violations            int                   `json:"violations"`
+	XP                    int                   `json:"xp"`
+	LandingCount          int                   `json:"landingCount"`
+	FlightTime            int                   `json:"flightTime"`
+	ATCOperations         int                   `json:"atcOperations"`
+	ATCRank               *int                  `json:"atcRank"` // nullable
+	Grade                 int                   `json:"grade"`
+	Hash                  string                `json:"hash"`
+	ViolationCountByLevel ViolationCountByLevel `json:"violationCountByLevel"`
+	Roles                 []int                 `json:"roles"`
+	UserID                string                `json:"userId"`
+	VirtualOrganization   *string               `json:"virtualOrganization"` // nullable
+	DiscourseUsername     *string               `json:"discourseUsername"`   // nullable
+	Groups                []string              `json:"groups"`
+	ErrorCode             int                   `json:"errorCode"`
+}
+
+type ViolationCountByLevel struct {
+	Level1 int `json:"level1"`
+	Level2 int `json:"level2"`
+	Level3 int `json:"level3"`
 }
 
 // ---- USER GRADE ----
@@ -93,19 +108,24 @@ type AircraftLivery struct {
 }
 
 // ---- USER FLIGHTS ----
-type UserFlightsResponse struct {
-	Flights []UserFlightEntry `json:"Flights"`
-}
+
 type UserFlightEntry struct {
-	ID           string    `json:"Id"`
-	StartTime    time.Time `json:"StartTime"`
-	EndTime      time.Time `json:"EndTime"`
-	Origin       string    `json:"Origin"`
-	Destination  string    `json:"Destination"`
-	AircraftID   int       `json:"AircraftID"`
-	LiveryID     int       `json:"LiveryID"`
-	FlightPlanID string    `json:"FlightPlanID"`
-	// Add additional fields if present
+	ID                 string    `json:"id"`
+	Created            time.Time `json:"created"`
+	UserID             string    `json:"userId"`
+	AircraftID         string    `json:"aircraftId"`
+	LiveryID           string    `json:"liveryId"`
+	Callsign           string    `json:"callsign"`
+	Server             string    `json:"server"`
+	DayTime            float32   `json:"dayTime"`
+	NightTime          float32   `json:"nightTime"`
+	TotalTime          float32   `json:"totalTime"`
+	LandingCount       int       `json:"landingCount"`
+	OriginAirport      string    `json:"originAirport"`
+	DestinationAirport string    `json:"destinationAirport"`
+	XP                 int       `json:"xp"`
+	WorldType          int       `json:"worldType"`
+	Violations         []any     `json:"violations"` // If you know violation type, replace 'any'
 }
 
 // ---- WORLD STATUS ----
@@ -145,8 +165,28 @@ type APIResponse struct {
 }
 
 type InitApiResponse struct {
-	IfcId                   string `json:"ifc_id"`
-	IsVerificationInitiated bool   `json:"is_verification_initiated"`
-	Message                 string `json:"message"`
-	LastFlight              string `json:"last_flight"`
+	IfcId   string             `json:"ifc_id"`
+	Status  bool               `json:"status"`
+	Message string             `json:"message"`
+	Steps   []RegistrationStep `json:"steps"`
+}
+
+type RegistrationStep struct {
+	Name    string `json:"name"`
+	Status  bool   `json:"status"`
+	Message string `json:"message"`
+}
+
+type UserFlightsResponse struct {
+	PageIndex   int               `json:"pageIndex"`
+	TotalPages  int               `json:"totalPages"`
+	TotalCount  int               `json:"totalCount"`
+	HasPrevious bool              `json:"hasPreviousPage"`
+	HasNext     bool              `json:"hasNextPage"`
+	Flights     []UserFlightEntry `json:"data"`
+}
+
+type UserFlightsRawResponse struct {
+	ErrorCode int                 `json:"errorCode"`
+	Result    UserFlightsResponse `json:"result"`
 }

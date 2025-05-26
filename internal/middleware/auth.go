@@ -37,6 +37,7 @@ func AuthMiddleware(userRepo *repositories.UserRepository) func(http.Handler) ht
 				if claims = auth.MakeClaimsFromApi(r.Context(), userRepo, serverId, userId); claims == nil {
 					log.Printf("No claims Found")
 				}
+				log.Printf("Claims: %v", claims)
 
 			default:
 				//http.Error(w, "Unauthorized", http.StatusUnauthorized)

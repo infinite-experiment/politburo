@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"infinite-experiment/politburo/internal/constants"
+	"infinite-experiment/politburo/internal/db/repositories"
 	"infinite-experiment/politburo/internal/models/dtos"
 	"infinite-experiment/politburo/internal/models/dtos/requests"
 	"infinite-experiment/politburo/internal/models/dtos/responses"
@@ -63,10 +64,6 @@ func RegisterUserHandler(w http.ResponseWriter, r *http.Request) {
 	respondWithSuccess(w, http.StatusOK, &resp)
 }
 
-type InitUserRegistrationReq struct {
-	IfcId string `json:"ifc_id"`
-}
-
 // InitUserRegistrationHandler handles POST /api/v1/user/register/init
 //
 // @Summary      Initiate user registration
@@ -77,7 +74,7 @@ type InitUserRegistrationReq struct {
 // @Param X-Discord-Id header string true "Discord ID"
 // @Param X-Server-Id header string true "Discord Server ID"  default(123456789)
 // @Param X-API-Key header string true "API KEY"
-// @Param        input  body      InitUserRegistrationReq  true  "IFC ID Payload"
+// @Param        input  body      dtos.InitUserRegistrationReq  true  "IFC ID Payload"
 // @Success      200    {object}  dtos.APIResponse
 // @Failure      400    {object}  dtos.APIResponse
 // @Router       /api/v1/user/register/init [post]
@@ -85,7 +82,7 @@ func InitUserRegistrationHandler(regService *services.RegistrationService) http.
 	return func(w http.ResponseWriter, r *http.Request) {
 
 		initTime := time.Now()
-		var req InitUserRegistrationReq
+		var req dtos.InitUserRegistrationReq
 
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.IfcId == "" {
 
@@ -99,7 +96,7 @@ func InitUserRegistrationHandler(regService *services.RegistrationService) http.
 			return
 		}
 
-		apiResp, _, err := regService.InitUserRegistration(r.Context(), req.IfcId)
+		apiResp, _, err := regService.InitUserRegistration(r.Context(), req.IfcId, req.LastFlight)
 		if err != nil {
 			resp := dtos.APIResponse{
 				Status:       string(constants.APIStatusError),
@@ -118,6 +115,30 @@ func InitUserRegistrationHandler(regService *services.RegistrationService) http.
 			Data:         apiResp,
 		}
 		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(resp)
+
+	}
+
+}
+
+// DeleteAllUsers godoc
+// @Summary      Delete all users (Test Only)
+// @Description  Deletes all users in the database. Intended for development/testing only.
+// @Tags         Test
+// @Param X-Discord-Id header string true "Discord ID" default(668664447950127154)
+// @Param X-Server-Id header string true "Discord Server ID" default(988020008665882624)
+// @Param X-API-Key header string true "API KEY" default(API_KEY_123)
+// @Produce      json
+// @Success      400  {object}  dtos.APIResponse  "Always returns error; not implemented for production use"
+// @Router       /api/v1/users/delete [get]
+func DeleteAllUsers(repo *repositories.UserRepository) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		repo.DeleteAllUsers(r.Context())
+		resp := dtos.APIResponse{
+			Status:  string(constants.APIStatusError),
+			Message: "Invalid IFC ID Received",
+		}
+		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(resp)
 
 	}

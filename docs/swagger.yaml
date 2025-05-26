@@ -1,10 +1,5 @@
 basePath: /
 definitions:
-  api.InitUserRegistrationReq:
-    properties:
-      ifc_id:
-        type: string
-    type: object
   dtos.APIResponse:
     properties:
       data: {}
@@ -13,6 +8,13 @@ definitions:
       response_time:
         type: string
       status:
+        type: string
+    type: object
+  dtos.InitUserRegistrationReq:
+    properties:
+      ifc_id:
+        type: string
+      last_flight:
         type: string
     type: object
   dtos.UserRegisterSwaggerResponse:
@@ -109,7 +111,7 @@ paths:
         name: input
         required: true
         schema:
-          $ref: '#/definitions/api.InitUserRegistrationReq'
+          $ref: '#/definitions/dtos.InitUserRegistrationReq'
       produces:
       - application/json
       responses:
@@ -124,6 +126,39 @@ paths:
       summary: Initiate user registration
       tags:
       - Users
+  /api/v1/users/delete:
+    get:
+      description: Deletes all users in the database. Intended for development/testing
+        only.
+      parameters:
+      - default: "668664447950127154"
+        description: Discord ID
+        in: header
+        name: X-Discord-Id
+        required: true
+        type: string
+      - default: "988020008665882624"
+        description: Discord Server ID
+        in: header
+        name: X-Server-Id
+        required: true
+        type: string
+      - default: API_KEY_123
+        description: API KEY
+        in: header
+        name: X-API-Key
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "400":
+          description: Always returns error; not implemented for production use
+          schema:
+            $ref: '#/definitions/dtos.APIResponse'
+      summary: Delete all users (Test Only)
+      tags:
+      - Test
   /healthCheck:
     get:
       description: Verifies the server is running.

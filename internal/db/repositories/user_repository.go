@@ -2,6 +2,7 @@ package repositories
 
 import (
 	"context"
+	"log"
 
 	"infinite-experiment/politburo/internal/constants"
 	"infinite-experiment/politburo/internal/models/entities"
@@ -45,4 +46,10 @@ func (r *UserRepository) FindUserByDiscordId(ctx context.Context, discordId stri
 	}
 
 	return &user, nil
+}
+
+func (r *UserRepository) DeleteAllUsers(ctx context.Context) error {
+	err := r.db.QueryRowxContext(ctx, constants.DeleteAllUsers)
+	log.Printf("Query output: %v", err)
+	return nil
 }

@@ -36,6 +36,7 @@ func RegisterRoutes(upSince time.Time) http.Handler {
 
 	apiV1 := r.PathPrefix("/api/v1").Subrouter()
 	apiV1.HandleFunc("/user/register", api.RegisterUserHandler).Methods("POST")
+	apiV1.HandleFunc("/users/delete", api.DeleteAllUsers(userRepo)).Methods("GET")
 	apiV1.HandleFunc("/user/register/init", api.InitUserRegistrationHandler(userRegistationService)).Methods("POST")
 
 	return r
