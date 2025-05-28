@@ -2,17 +2,18 @@ package api
 
 import (
 	"encoding/json"
-	"fmt"
-	"infinite-experiment/politburo/internal/constants"
-	"infinite-experiment/politburo/internal/models/dtos"
-	"infinite-experiment/politburo/internal/services"
 	"net/http"
 	"strconv"
 	"time"
+
+	"infinite-experiment/politburo/internal/constants"
+	"infinite-experiment/politburo/internal/models/dtos"
+	"infinite-experiment/politburo/internal/services"
+
+	"github.com/go-chi/chi/v5"
 )
 
-// InitUserRegistrationHandler handles GET /api/v1/user/{user_id}/flights
-//
+// UserFlightsHandler godoc
 // @Summary      Get flight history for a user
 // @Description  Returns a paginated list of flights for the given user.
 // @Tags         Flights
@@ -25,14 +26,13 @@ import (
 // @Success      200           {object} dtos.APIResponse
 // @Failure      400,500       {object} dtos.APIResponse
 // @Router       /api/v1/user/{user_id}/flights [get]
-func UserFlightsHandler(fltScv *services.FlightsService) http.HandlerFunc {
-
+func UserFlightsHandler(fltSvc *services.FlightsService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		fmt.Printf("%v\n========\n%v", r, *r)
 		initTime := time.Now()
-		user_id := r.PathValue("user_id")
 
-		if user_id == "" {
+		// Extract path parameter
+		userID := chi.URLParam(r, "user_id")
+		if userID == "" {
 			resp := dtos.APIResponse{
 				Status:       string(constants.APIStatusError),
 				Message:      "Invalid IFC ID Received",
@@ -42,17 +42,26 @@ func UserFlightsHandler(fltScv *services.FlightsService) http.HandlerFunc {
 			json.NewEncoder(w).Encode(resp)
 			return
 		}
-		page := 1
 
-		qs := r.URL.Query().Get("page")
-		if qs != "" {
-			if num, err := strconv.Atoi(qs); err == nil && num > 0 {
-				page = num
+		// Parse query parameter 'page'
+		page := 1
+		if qs := r.URL.Query().Get("page"); qs != "" {
+			if p, err := strconv.Atoi(qs); err == nil && p > 0 {
+				page = p
+			} else {
+				resp := dtos.APIResponse{
+					Status:       string(constants.APIStatusError),
+					Message:      "Invalid page parameter",
+					ResponseTime: services.GetResponseTime(initTime),
+				}
+				w.WriteHeader(http.StatusBadRequest)
+				json.NewEncoder(w).Encode(resp)
+				return
 			}
 		}
 
-		flights, err := fltScv.GetUserFlights(user_id, page)
-
+		// Call service
+		dto, err := fltSvc.GetUserFlights(userID, page)
 		if err != nil {
 			resp := dtos.APIResponse{
 				Status:       string(constants.APIStatusError),
@@ -61,15 +70,17 @@ func UserFlightsHandler(fltScv *services.FlightsService) http.HandlerFunc {
 			}
 			w.WriteHeader(http.StatusInternalServerError)
 			json.NewEncoder(w).Encode(resp)
+			return
 		}
 
 		resp := dtos.APIResponse{
 			Status:       string(constants.APIStatusOk),
-			Message:      "Success",
-			Data:         flights,
+			Message:      "Fetched Results",
 			ResponseTime: services.GetResponseTime(initTime),
+			Data:         dto,
 		}
-		w.WriteHeader(http.StatusOK)
+		// Send JSON
+		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(resp)
 	}
 }

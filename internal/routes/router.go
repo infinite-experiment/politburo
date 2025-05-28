@@ -1,46 +1,48 @@
 package routes
 
 import (
+	"net/http"
+	"time"
+
 	"infinite-experiment/politburo/internal/api"
 	"infinite-experiment/politburo/internal/db"
 	"infinite-experiment/politburo/internal/db/repositories"
 	"infinite-experiment/politburo/internal/middleware"
 	"infinite-experiment/politburo/internal/services"
-	"net/http"
-	"time"
 
-	"github.com/gorilla/mux"
+	"github.com/go-chi/chi/v5"
 	httpSwagger "github.com/swaggo/http-swagger"
 )
 
 func RegisterRoutes(upSince time.Time) http.Handler {
-	r := mux.NewRouter()
+	// initialize Chi router
+	r := chi.NewRouter()
 
-	// TODO: Add Middlewares
-	// Global Middleware
-	// r.Use(middleware.RateLimitMiddleware)
+	// global middleware
+	r.Use(middleware.Logging)
+	r.Use(middleware.AuthMiddleware(repositories.NewUserRepository(db.DB)))
 
+	// health check
+	r.Get("/healthCheck", api.HealthCheckHandler(db.DB, upSince))
+
+	// swagger UI
+	r.Handle("/swagger/*", httpSwagger.WrapHandler)
+
+	// services
 	userRepo := repositories.NewUserRepository(db.DB)
-	cacheService := services.NewCacheService(60000, 600)
-	liveApiService := services.NewLiveAPIService()
-	flightService := services.NewFlightsService(*cacheService, liveApiService)
-
-	userRegistationService := services.NewRegistrationService(liveApiService, *cacheService, *userRepo)
-	// userService := services.NewUserService(userRepo)
+	cacheSvc := services.NewCacheService(60000, 600)
+	liveSvc := services.NewLiveAPIService()
+	flightSvc := services.NewFlightsService(*cacheSvc, liveSvc)
+	regSvc := services.NewRegistrationService(liveSvc, *cacheSvc, *userRepo)
 	api.SetUserService(services.NewUserService(userRepo))
 
-	r.Use(middleware.AuthMiddleware(userRepo))
-
-	r.HandleFunc("/healthCheck", api.HealthCheckHandler(db.DB, upSince)).Methods("GET")
-
-	r.PathPrefix("/swagger/").Handler(httpSwagger.WrapHandler)
-
-	apiV1 := r.PathPrefix("/api/v1").Subrouter()
-	apiV1.HandleFunc("/user/register", api.RegisterUserHandler).Methods("POST")
-	apiV1.HandleFunc("/user/{user_id}/flights", api.UserFlightsHandler(flightService)).Methods("GET")
-	apiV1.HandleFunc("/users/delete", api.DeleteAllUsers(userRepo)).Methods("GET")
-	apiV1.HandleFunc("/user/register/init", api.InitUserRegistrationHandler(userRegistationService)).Methods("POST")
+	// API v1 routes
+	r.Route("/api/v1", func(r chi.Router) {
+		r.Post("/user/register", api.RegisterUserHandler)
+		r.Get("/user/{user_id}/flights", api.UserFlightsHandler(flightSvc))
+		r.Get("/users/delete", api.DeleteAllUsers(userRepo))
+		r.Post("/user/register/init", api.InitUserRegistrationHandler(regSvc))
+	})
 
 	return r
-
 }
