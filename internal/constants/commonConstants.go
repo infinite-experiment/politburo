@@ -3,6 +3,7 @@ package constants
 type (
 	RequestSource string
 	APIStatus     string
+	CachePrefix   string
 )
 
 const (
@@ -11,4 +12,6 @@ const (
 
 	APIStatusOk    APIStatus = "ok"
 	APIStatusError APIStatus = "error"
+
+	CachePrefixFlightHistory CachePrefix = "FH_"
 )

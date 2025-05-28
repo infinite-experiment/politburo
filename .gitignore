@@ -37,5 +37,9 @@ logs/
 # Coverage/testing
 coverage.*
 *.coverprofile
+.air_temp/
+main
 
+swagger.json
+swagger.yaml
 # Swagger generated

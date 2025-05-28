@@ -190,3 +190,21 @@ type UserFlightsRawResponse struct {
 	ErrorCode int                 `json:"errorCode"`
 	Result    UserFlightsResponse `json:"result"`
 }
+
+type HistoryRecord struct {
+	Origin    string    `json:"origin"`
+	Dest      string    `json:"dest"`
+	TimeStamp time.Time `json:"timestamp"`
+	EndTime   time.Time `json:"endtime"`
+	Landings  int       `json:"landings"`
+	Server    string    `json:"server"`
+	Aircraft  string    `json:"aircraft"`
+	Livery    string    `json:"livery"`
+	MapUrl    string    `json:"mapUrl"`
+}
+
+type FlightHistoryDto struct {
+	PageNo  int             `json:"page"`
+	Records []HistoryRecord `json:"records"`
+	Error   string          `json:"error"`
+}

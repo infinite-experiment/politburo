@@ -23,6 +23,7 @@ func RegisterRoutes(upSince time.Time) http.Handler {
 	userRepo := repositories.NewUserRepository(db.DB)
 	cacheService := services.NewCacheService(60000, 600)
 	liveApiService := services.NewLiveAPIService()
+	flightService := services.NewFlightsService(*cacheService, liveApiService)
 
 	userRegistationService := services.NewRegistrationService(liveApiService, *cacheService, *userRepo)
 	// userService := services.NewUserService(userRepo)
@@ -36,6 +37,7 @@ func RegisterRoutes(upSince time.Time) http.Handler {
 
 	apiV1 := r.PathPrefix("/api/v1").Subrouter()
 	apiV1.HandleFunc("/user/register", api.RegisterUserHandler).Methods("POST")
+	apiV1.HandleFunc("/user/{user_id}/flights", api.UserFlightsHandler(flightService)).Methods("GET")
 	apiV1.HandleFunc("/users/delete", api.DeleteAllUsers(userRepo)).Methods("GET")
 	apiV1.HandleFunc("/user/register/init", api.InitUserRegistrationHandler(userRegistationService)).Methods("POST")
 
