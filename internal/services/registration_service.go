@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"infinite-experiment/politburo/internal/common"
 	"infinite-experiment/politburo/internal/context"
 	"infinite-experiment/politburo/internal/db/repositories"
 	"infinite-experiment/politburo/internal/models/dtos"
@@ -15,12 +16,12 @@ import (
 )
 
 type RegistrationService struct {
-	Cache          CacheService
-	LiveAPI        *LiveAPIService
+	Cache          common.CacheService
+	LiveAPI        *common.LiveAPIService
 	UserRepository repositories.UserRepository
 }
 
-func NewRegistrationService(liveAPI *LiveAPIService, cache CacheService, userRepo repositories.UserRepository) *RegistrationService {
+func NewRegistrationService(liveAPI *common.LiveAPIService, cache common.CacheService, userRepo repositories.UserRepository) *RegistrationService {
 	return &RegistrationService{
 		LiveAPI:        liveAPI,
 		Cache:          cache,

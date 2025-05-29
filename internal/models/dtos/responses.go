@@ -97,14 +97,14 @@ type FlightRouteEntry struct {
 
 // ---- AIRCRAFT LIVERIES ----
 type AircraftLiveriesResponse struct {
-	Liveries []AircraftLivery `json:"Liveries"`
+	Liveries  []AircraftLivery `json:"result"`
+	ErrorCode int              `json:"errorCode"`
 }
 type AircraftLivery struct {
-	ID         int    `json:"Id"`
-	AircraftID int    `json:"AircraftId"`
-	Name       string `json:"Name"`
-	ShortName  string `json:"ShortName"`
-	IsDefault  bool   `json:"IsDefault"`
+	LiveryId     string `json:"id"`
+	AircraftID   string `json:"aircraftID"`
+	LiveryName   string `json:"liveryName"`
+	AircraftName string `json:"aircraftName"`
 }
 
 // ---- USER FLIGHTS ----
@@ -192,15 +192,18 @@ type UserFlightsRawResponse struct {
 }
 
 type HistoryRecord struct {
-	Origin    string    `json:"origin"`
-	Dest      string    `json:"dest"`
-	TimeStamp time.Time `json:"timestamp"`
-	EndTime   time.Time `json:"endtime"`
-	Landings  int       `json:"landings"`
-	Server    string    `json:"server"`
-	Aircraft  string    `json:"aircraft"`
-	Livery    string    `json:"livery"`
-	MapUrl    string    `json:"mapUrl"`
+	Origin     string    `json:"origin"`
+	Dest       string    `json:"dest"`
+	TimeStamp  time.Time `json:"timestamp"`
+	EndTime    time.Time `json:"endtime"`
+	Landings   int       `json:"landings"`
+	Server     string    `json:"server"`
+	Aircraft   string    `json:"aircraft"`
+	Livery     string    `json:"livery"`
+	MapUrl     string    `json:"mapUrl"`
+	Callsign   string    `json:"callsign"`
+	Violations int       `json:"violations"`
+	Equipment  string    `json:"equipment"`
 }
 
 type FlightHistoryDto struct {

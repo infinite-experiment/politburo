@@ -2,15 +2,17 @@ package services
 
 import (
 	"fmt"
+	"infinite-experiment/politburo/internal/common"
 	"infinite-experiment/politburo/internal/models/dtos"
+	"infinite-experiment/politburo/internal/workers"
 )
 
 type FlightsService struct {
-	Cache      CacheService
-	ApiService *LiveAPIService
+	Cache      *common.CacheService
+	ApiService *common.LiveAPIService
 }
 
-func NewFlightsService(cache CacheService, liveApi *LiveAPIService) *FlightsService {
+func NewFlightsService(cache *common.CacheService, liveApi *common.LiveAPIService) *FlightsService {
 
 	return &FlightsService{
 		Cache:      cache,
@@ -44,17 +46,37 @@ func (svc *FlightsService) GetUserFlights(userId string, page int) (*dtos.Flight
 	}
 
 	for _, rec := range flts.Flights {
-		response.Records = append(response.Records,
-			dtos.HistoryRecord{
-				Origin:    rec.OriginAirport,
-				Dest:      rec.DestinationAirport,
-				TimeStamp: rec.Created.UTC(),
-				Landings:  rec.LandingCount,
-				Server:    rec.Server,
-				Aircraft:  rec.AircraftID,
-				Livery:    rec.LiveryID,
-				MapUrl:    fmt.Sprintf("https://%s%s", "vizburo.infinite-flight.com/user_id=", rec.ID),
-			})
+
+		eqpmnt := GetAircraftLivery(rec.LiveryID, svc.Cache)
+
+		aircraftName := ""
+		liveryName := ""
+
+		if eqpmnt != nil {
+			aircraftName = eqpmnt.AircraftName
+			liveryName = eqpmnt.LiveryName
+		}
+
+		dto := dtos.HistoryRecord{
+			Origin:     rec.OriginAirport,
+			Dest:       rec.DestinationAirport,
+			TimeStamp:  rec.Created.UTC(),
+			Landings:   rec.LandingCount,
+			Server:     rec.Server,
+			Equipment:  fmt.Sprintf("%s %s", GetShortAircraftName(aircraftName), GetShortLiveryName(liveryName)),
+			Livery:     liveryName,
+			Callsign:   rec.Callsign,
+			Violations: len(rec.Violations),
+		}
+		select {
+		case workers.LogbookQueue <- workers.LogbookRequest{FlightId: rec.ID}:
+			dto.MapUrl = fmt.Sprintf("https://%s%s", "comrade.cc/i=", rec.ID)
+			dto.MapUrl = ""
+		default:
+			dto.MapUrl = ""
+
+		}
+		response.Records = append(response.Records, dto)
 	}
 
 	return response, nil

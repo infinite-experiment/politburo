@@ -1,4 +1,4 @@
-package services
+package common
 
 import (
 	"time"
@@ -19,7 +19,7 @@ func NewCacheService(defaultExpirationSeconds, cleanUpIntervalSeconds int) *Cach
 }
 
 func (cs *CacheService) Set(key string, value interface{}, duration time.Duration) {
-	cs.cache.Set(key, value, duration)
+	cs.cache.Set(key, value, duration*time.Minute)
 }
 
 func (cs *CacheService) Get(key string) (interface{}, bool) {

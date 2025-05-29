@@ -2,7 +2,7 @@
 CREATE TABLE users (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     discord_id VARCHAR(32) UNIQUE NOT NULL,
-    if_community_id VARCHAR(10),
+    if_community_id VARCHAR(30),
     if_api_id UUID,
     is_active BOOLEAN DEFAULT false,
     username TEXT,
@@ -14,7 +14,7 @@ CREATE TABLE users (
 CREATE TABLE virtual_airlines (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name TEXT NOT NULL,
-    code VARCHAR(10) UNIQUE NOT NULL,
+    code VARCHAR(30) UNIQUE NOT NULL,
     is_active BOOLEAN DEFAULT true,
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW()
@@ -36,6 +36,10 @@ CREATE TABLE va_user_roles (
     is_active BOOLEAN DEFAULT true,
     joined_at TIMESTAMP DEFAULT NOW(),
     UNIQUE (user_id, va_id, role)
+);
+CREATE TABLE api_keys (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    status BOOLEAN DEFAULT false
 );
 
 

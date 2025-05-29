@@ -8,4 +8,8 @@ const (
 	DeleteAllUsers = `
 	DELETE FROM users where discord_id IS NOT NULL
 	`
+
+	GetStatusByApiKey = `
+	SELECT id, status from api_keys where id = $1
+	`
 )

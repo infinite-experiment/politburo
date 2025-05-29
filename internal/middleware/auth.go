@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-func AuthMiddleware(userRepo *repositories.UserRepository) func(http.Handler) http.Handler {
+func AuthMiddleware(userRepo *repositories.UserRepository, keysRepo *repositories.KeysRepo) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -28,20 +28,31 @@ func AuthMiddleware(userRepo *repositories.UserRepository) func(http.Handler) ht
 					UserIDValue: "user123",
 					RoleValue:   "PILOT",
 				}
+				http.Error(w, "Unauthorized. Missing API Key", http.StatusUnauthorized)
+				return
 
 			case apiKey != "":
 				// TODO: Validate API Key from DB
 				serverId := r.Header.Get("X-Server-Id")
 				userId := r.Header.Get("X-Discord-Id")
 
-				if claims = auth.MakeClaimsFromApi(r.Context(), userRepo, serverId, userId); claims == nil {
-					log.Printf("No claims Found")
+				keyRes, err := keysRepo.GetStatus(r.Context(), apiKey)
+				if err != nil {
+					http.Error(w, "Unauthorized. Invalid API Key", http.StatusUnauthorized)
+					return
 				}
+
+				if !keyRes.Status {
+					http.Error(w, "Unauthorized. Inactive API Key", http.StatusUnauthorized)
+					return
+				}
+
+				claims = auth.MakeClaimsFromApi(r.Context(), userRepo, serverId, userId)
 				log.Printf("Claims: %v", claims)
 
 			default:
-				//http.Error(w, "Unauthorized", http.StatusUnauthorized)
-				//return
+				http.Error(w, "Unauthorized. Unknown Error", http.StatusUnauthorized)
+				return
 			}
 
 			ctx := context.SetUserClaims(r.Context(), claims)
