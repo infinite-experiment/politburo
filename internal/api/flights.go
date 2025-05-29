@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"time"
 
+	"infinite-experiment/politburo/internal/common"
 	"infinite-experiment/politburo/internal/constants"
 	"infinite-experiment/politburo/internal/models/dtos"
 	"infinite-experiment/politburo/internal/services"
@@ -36,7 +37,7 @@ func UserFlightsHandler(fltSvc *services.FlightsService) http.HandlerFunc {
 			resp := dtos.APIResponse{
 				Status:       string(constants.APIStatusError),
 				Message:      "Invalid IFC ID Received",
-				ResponseTime: services.GetResponseTime(initTime),
+				ResponseTime: common.GetResponseTime(initTime),
 			}
 			w.WriteHeader(http.StatusBadRequest)
 			json.NewEncoder(w).Encode(resp)
@@ -52,7 +53,7 @@ func UserFlightsHandler(fltSvc *services.FlightsService) http.HandlerFunc {
 				resp := dtos.APIResponse{
 					Status:       string(constants.APIStatusError),
 					Message:      "Invalid page parameter",
-					ResponseTime: services.GetResponseTime(initTime),
+					ResponseTime: common.GetResponseTime(initTime),
 				}
 				w.WriteHeader(http.StatusBadRequest)
 				json.NewEncoder(w).Encode(resp)
@@ -66,7 +67,7 @@ func UserFlightsHandler(fltSvc *services.FlightsService) http.HandlerFunc {
 			resp := dtos.APIResponse{
 				Status:       string(constants.APIStatusError),
 				Message:      err.Error(),
-				ResponseTime: services.GetResponseTime(initTime),
+				ResponseTime: common.GetResponseTime(initTime),
 			}
 			w.WriteHeader(http.StatusInternalServerError)
 			json.NewEncoder(w).Encode(resp)
@@ -76,7 +77,7 @@ func UserFlightsHandler(fltSvc *services.FlightsService) http.HandlerFunc {
 		resp := dtos.APIResponse{
 			Status:       string(constants.APIStatusOk),
 			Message:      "Fetched Results",
-			ResponseTime: services.GetResponseTime(initTime),
+			ResponseTime: common.GetResponseTime(initTime),
 			Data:         dto,
 		}
 		// Send JSON

@@ -84,17 +84,6 @@ type FlightEntry struct {
 	// Add other fields as needed from docs
 }
 
-// ---- FLIGHT ROUTE ----
-type FlightRouteResponse struct {
-	Route []FlightRouteEntry `json:"Route"`
-}
-type FlightRouteEntry struct {
-	Latitude  float64 `json:"Latitude"`
-	Longitude float64 `json:"Longitude"`
-	Altitude  int     `json:"Altitude"`
-	Time      string  `json:"Time"` // ISO8601
-}
-
 // ---- AIRCRAFT LIVERIES ----
 type AircraftLiveriesResponse struct {
 	Liveries  []AircraftLivery `json:"result"`
@@ -204,10 +193,44 @@ type HistoryRecord struct {
 	Callsign   string    `json:"callsign"`
 	Violations int       `json:"violations"`
 	Equipment  string    `json:"equipment"`
+	Duration   string    `json:"duration"`
 }
 
 type FlightHistoryDto struct {
 	PageNo  int             `json:"page"`
 	Records []HistoryRecord `json:"records"`
 	Error   string          `json:"error"`
+}
+
+type SessionsResponse struct {
+	ErrorCode int       `json:"errorCode"`
+	Result    []Session `json:"result"`
+}
+
+type Session struct {
+	MaxUsers          int     `json:"maxUsers"`
+	ID                string  `json:"id"`
+	Name              string  `json:"name"`
+	UserCount         int     `json:"userCount"`
+	Type              int     `json:"type"`
+	WorldType         int     `json:"worldType"`
+	MinimumGradeLevel int     `json:"minimumGradeLevel"`
+	MinimumAppVersion string  `json:"minimumAppVersion"`
+	MaximumAppVersion *string `json:"maximumAppVersion"` // nullable
+}
+
+type FlightRouteResponse struct {
+	ErrorCode int              `json:"errorCode"`
+	Result    []FlightPosition `json:"result"`
+}
+
+type FlightPosition struct {
+	Latitude    float64   `json:"latitude"`
+	Longitude   float64   `json:"longitude"`
+	Altitude    float64   `json:"altitude"`
+	Track       float64   `json:"track"`
+	GroundSpeed float64   `json:"groundSpeed"`
+	Date        time.Time `json:"date"`
+	ID          *string   `json:"id"`
+	FID         string    `json:"fid"`
 }

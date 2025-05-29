@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"time"
 
+	"infinite-experiment/politburo/internal/common"
 	"infinite-experiment/politburo/internal/constants"
 	"infinite-experiment/politburo/internal/db/repositories"
 	"infinite-experiment/politburo/internal/models/dtos"
@@ -89,7 +90,7 @@ func InitUserRegistrationHandler(regService *services.RegistrationService) http.
 			resp := dtos.APIResponse{
 				Status:       string(constants.APIStatusError),
 				Message:      "Invalid IFC ID Received",
-				ResponseTime: services.GetResponseTime(initTime),
+				ResponseTime: common.GetResponseTime(initTime),
 			}
 			w.WriteHeader(http.StatusBadRequest)
 			json.NewEncoder(w).Encode(resp)
@@ -101,7 +102,7 @@ func InitUserRegistrationHandler(regService *services.RegistrationService) http.
 			resp := dtos.APIResponse{
 				Status:       string(constants.APIStatusError),
 				Message:      "Failed to process",
-				ResponseTime: services.GetResponseTime(initTime),
+				ResponseTime: common.GetResponseTime(initTime),
 			}
 			w.WriteHeader(http.StatusBadRequest)
 			json.NewEncoder(w).Encode(resp)
@@ -111,7 +112,7 @@ func InitUserRegistrationHandler(regService *services.RegistrationService) http.
 		resp := dtos.APIResponse{
 			Status:       string(constants.APIStatusOk),
 			Message:      "Initiated",
-			ResponseTime: services.GetResponseTime(initTime),
+			ResponseTime: common.GetResponseTime(initTime),
 			Data:         apiResp,
 		}
 		w.WriteHeader(http.StatusOK)

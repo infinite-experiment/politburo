@@ -17,12 +17,21 @@ import (
 )
 
 func RegisterRoutes(upSince time.Time) http.Handler {
+
 	// initialize Chi router
 	r := chi.NewRouter()
 
 	// global middleware
 	//r.Use(middleware.Logging)
 
+	// r.Use(cors.Handler(cors.Options{
+	// 	AllowedOrigins:   []string{"https://*", "http://localhost:8081"}, // Allow all origins
+	// 	AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+	// 	AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
+	// 	ExposedHeaders:   []string{"Link"},
+	// 	AllowCredentials: false,
+	// 	MaxAge:           300, // Maximum value not ignored by any of major browsers
+	// }))
 	// health check
 	r.Get("/healthCheck", api.HealthCheckHandler(db.DB, upSince))
 
@@ -39,7 +48,10 @@ func RegisterRoutes(upSince time.Time) http.Handler {
 	regSvc := services.NewRegistrationService(liveSvc, *cacheSvc, *userRepo)
 
 	api.SetUserService(services.NewUserService(userRepo))
+	r.Get("/public/flight", api.UserFlightMapHandler(cacheSvc))
 
+	//Setup
+	go workers.LogbookWorker(cacheSvc, liveSvc)
 	go workers.StartCacheFiller(cacheSvc, liveSvc)
 	// API v1 routes
 	r.Route("/api/v1", func(r chi.Router) {

@@ -14,4 +14,7 @@ const (
 	APIStatusError APIStatus = "error"
 
 	CachePrefixFlightHistory CachePrefix = "FH_"
+	CachePrefixLiveries      CachePrefix = "LIVERY_"
+	CachePrefixExpertServer  CachePrefix = "EXPERT_SERVER_ID"
+	CachePrefixWorldDetails  CachePrefix = "IF_WORLD_DETAILS"
 )

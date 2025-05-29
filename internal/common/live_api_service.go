@@ -49,8 +49,8 @@ func (svc *LiveAPIService) doGET(endpoint string, result interface{}) (int, erro
 		return 0, err
 	}
 
-	log.Printf("%v", req)
-	log.Printf("%v", svc.BaseURL+endpoint)
+	// log.Printf("%v", req)
+	// log.Printf("%v", svc.BaseURL+endpoint)
 
 	defer resp.Body.Close()
 
@@ -147,6 +147,27 @@ func (svc *LiveAPIService) GetUserByIfcId(ifcId string) (*dtos.UserStatsResponse
 	return &r, status, nil
 }
 
+// Get Sessions
+func (svc *LiveAPIService) GetSessions() (*dtos.SessionsResponse, error) {
+	var r dtos.SessionsResponse
+	_, err := svc.doGET("/sessions", &r)
+
+	if err != nil {
+		return nil, err
+	}
+	return &r, nil
+}
+
+// Flight Route
+func (svc *LiveAPIService) GetFlightRoute(flightID string, sessionId string) (*dtos.FlightRouteResponse, int, error) {
+	var r dtos.FlightRouteResponse
+	status, err := svc.doGET("/sessions/"+sessionId+"/flights/"+flightID+"/route", &r)
+	if err != nil {
+		return nil, status, err
+	}
+	return &r, status, nil
+}
+
 // ATC
 func (svc *LiveAPIService) GetATC() (*dtos.ATCResponse, int, error) {
 	var r dtos.ATCResponse
@@ -161,16 +182,6 @@ func (svc *LiveAPIService) GetATC() (*dtos.ATCResponse, int, error) {
 func (svc *LiveAPIService) GetFlights() (*dtos.FlightsResponse, int, error) {
 	var r dtos.FlightsResponse
 	status, err := svc.doGET("/flights", &r)
-	if err != nil {
-		return nil, status, err
-	}
-	return &r, status, nil
-}
-
-// Flight Route
-func (svc *LiveAPIService) GetFlightRoute(flightID string) (*dtos.FlightRouteResponse, int, error) {
-	var r dtos.FlightRouteResponse
-	status, err := svc.doGET("/flight/route/"+flightID, &r)
 	if err != nil {
 		return nil, status, err
 	}
