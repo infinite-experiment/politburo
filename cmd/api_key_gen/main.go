@@ -3,13 +3,14 @@ package main
 import (
 	"database/sql"
 	"fmt"
+	"os"
 
 	_ "github.com/lib/pq"
 )
 
 func main() {
-	// dsn := os.Getenv("POSTGRES_DSN")
-	dsn := "postgres://ieuser:iepass@localhost:5432/infinite?sslmode=disable"
+	dsn := os.Getenv("POSTGRES_DSN")
+	//dsn := "postgres://ieuser:iepass@localhost:5432/infinite?sslmode=disable"
 
 	db, err := sql.Open("postgres", dsn)
 	if err != nil {
