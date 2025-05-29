@@ -189,7 +189,6 @@ func (svc *LiveAPIService) GetAircraftLiveries() (*dtos.AircraftLiveriesResponse
 
 /**
 GET https://api.infiniteflight.com/public/v2/users/813ef838-f55f-40ba-99a1-594c4c28c86f/flights?page=1
-Authorization: Bearer ml2i201zuwx48fra1dj5gexd1kbjq10t
 */
 // User Flights
 func (svc *LiveAPIService) GetUserFlights(userID string, page int) (*dtos.UserFlightsResponse, int, error) {
