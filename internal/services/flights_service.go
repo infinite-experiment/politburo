@@ -94,7 +94,7 @@ func (svc *FlightsService) GetUserFlights(userId string, page int) (*dtos.Flight
 		if rec.OriginAirport != "" && rec.DestinationAirport != "" && rec.TotalTime > 0 && time.Since(rec.Created) <= 72*time.Hour {
 			select {
 			case workers.LogbookQueue <- workers.LogbookRequest{FlightId: rec.ID, Flight: rec}:
-				dto.MapUrl = fmt.Sprintf("https://%s%s", "comrade.cc?i=", rec.ID)
+				dto.MapUrl = fmt.Sprintf("https://%s%s", "comradebot.cc?i=", rec.ID)
 				//dto.MapUrl = ""
 			default:
 				dto.MapUrl = ""
