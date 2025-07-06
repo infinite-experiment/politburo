@@ -1,9 +1,10 @@
 package constants
 
 type (
-	RequestSource string
-	APIStatus     string
-	CachePrefix   string
+	RequestSource        string
+	APIStatus            string
+	CachePrefix          string
+	LogbookRequestFilter string
 )
 
 const (
@@ -17,4 +18,7 @@ const (
 	CachePrefixLiveries      CachePrefix = "LIVERY_"
 	CachePrefixExpertServer  CachePrefix = "EXPERT_SERVER_ID"
 	CachePrefixWorldDetails  CachePrefix = "IF_WORLD_DETAILS"
+
+	FilterUser      LogbookRequestFilter = "USER"
+	FilterDiscordId LogbookRequestFilter = "DISCORD_ID"
 )

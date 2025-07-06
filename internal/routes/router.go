@@ -13,6 +13,7 @@ import (
 	"infinite-experiment/politburo/internal/workers"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/cors"
 	httpSwagger "github.com/swaggo/http-swagger"
 )
 
@@ -45,7 +46,8 @@ func RegisterRoutes(upSince time.Time) http.Handler {
 	cacheSvc := common.NewCacheService(60000, 600)
 	liveSvc := common.NewLiveAPIService()
 	flightSvc := services.NewFlightsService(cacheSvc, liveSvc)
-	regSvc := services.NewRegistrationService(liveSvc, *cacheSvc, *userRepo)
+	vaRepo := repositories.NewVARepository(db.DB)
+	regSvc := services.NewRegistrationService(liveSvc, *cacheSvc, *userRepo, *vaRepo)
 
 	api.SetUserService(services.NewUserService(userRepo))
 	r.Get("/public/flight", api.UserFlightMapHandler(cacheSvc))
@@ -60,6 +62,7 @@ func RegisterRoutes(upSince time.Time) http.Handler {
 		r.Get("/user/{user_id}/flights", api.UserFlightsHandler(flightSvc))
 		r.Get("/users/delete", api.DeleteAllUsers(userRepo))
 		r.Post("/user/register/init", api.InitUserRegistrationHandler(regSvc))
+		r.Post("/server/init", api.InitRegisterServer(regSvc))
 	})
 
 	return r

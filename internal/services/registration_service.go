@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"infinite-experiment/politburo/internal/common"
+	"infinite-experiment/politburo/internal/constants"
 	"infinite-experiment/politburo/internal/context"
 	"infinite-experiment/politburo/internal/db/repositories"
 	"infinite-experiment/politburo/internal/models/dtos"
@@ -19,13 +20,15 @@ type RegistrationService struct {
 	Cache          common.CacheService
 	LiveAPI        *common.LiveAPIService
 	UserRepository repositories.UserRepository
+	VARepository   repositories.VARepository
 }
 
-func NewRegistrationService(liveAPI *common.LiveAPIService, cache common.CacheService, userRepo repositories.UserRepository) *RegistrationService {
+func NewRegistrationService(liveAPI *common.LiveAPIService, cache common.CacheService, userRepo repositories.UserRepository, vaRepo repositories.VARepository) *RegistrationService {
 	return &RegistrationService{
 		LiveAPI:        liveAPI,
 		Cache:          cache,
 		UserRepository: userRepo,
+		VARepository:   vaRepo,
 	}
 }
 
@@ -53,9 +56,9 @@ func (svc *RegistrationService) InitUserRegistration(ctx stdContext.Context, ifc
 		return &dtos.InitApiResponse{
 			IfcId:   ifcId,
 			Status:  false,
-			Message: "Unable to initialise registration",
+			Message: constants.StatusRegistrationInit,
 			Steps:   steps,
-		}, "Error", nil
+		}, constants.StatusError, nil
 	}
 
 	if data.IFProfile == nil {
@@ -64,9 +67,9 @@ func (svc *RegistrationService) InitUserRegistration(ctx stdContext.Context, ifc
 		return &dtos.InitApiResponse{
 			IfcId:   ifcId,
 			Status:  false,
-			Message: "Infinite Flight Details not found for IFC Id",
+			Message: constants.StatusUserNotFound,
 			Steps:   steps,
-		}, "Error", nil
+		}, constants.StatusError, nil
 	}
 
 	// STEP 2 - Fetch User Flights
@@ -74,53 +77,21 @@ func (svc *RegistrationService) InitUserRegistration(ctx stdContext.Context, ifc
 		Name: "if_flight_history", Status: true, Message: "Fetched flight history",
 	})
 
-	page := 1
-	routeStr := ""
-outer:
-	for {
-		fltResp, _, err := svc.LiveAPI.GetUserFlights(data.IFProfile.UserID, page)
-
-		if err != nil {
-			log.Printf("%v", err)
-			steps[1].Message = err.Error()
-			steps[1].Status = false
-			return &dtos.InitApiResponse{
-				IfcId:   ifcId,
-				Status:  false,
-				Message: "Failed to fetch user flights",
-				Steps:   steps,
-			}, "Unable to find user flight history", nil
-		}
-
-		for c := 0; c < len(fltResp.Flights); c++ {
-			or := fltResp.Flights[c].OriginAirport
-			de := fltResp.Flights[c].DestinationAirport
-			if or != "" && de != "" {
-				routeStr = fmt.Sprintf("%s-%s", or, de)
-				break outer
-			}
-			log.Printf("Flight Route: %s-%s", fltResp.Flights[c].OriginAirport, fltResp.Flights[c].DestinationAirport)
-		}
-
-		// Max 3 searches
-		if page > 2 {
-			log.Printf("%v", err)
-			steps[1].Message = "No recent flight found"
-			steps[1].Status = false
-			return &dtos.InitApiResponse{
-				IfcId:   ifcId,
-				Status:  false,
-				Message: "Failed to fetch user flights",
-				Steps:   steps,
-			}, "Unable to find user flight history", nil
-		}
-
-		page++
-	}
-
 	steps = append(steps, dtos.RegistrationStep{
 		Name: "user_check", Status: true, Message: "Last Flight validated.",
 	})
+	routeStr, err := svc.findRecentFlightRoute(data.IFProfile.UserID)
+
+	if err != nil {
+		steps[1].Status = false
+		steps[1].Message = err.Error()
+		return &dtos.InitApiResponse{
+			IfcId:   ifcId,
+			Status:  false,
+			Message: constants.StatusFailedToFetch,
+			Steps:   steps,
+		}, constants.StatusFailedToFetch, nil
+	}
 
 	if routeStr == "" || routeStr != lastFlight {
 		if routeStr == "" {
@@ -132,9 +103,9 @@ outer:
 		return &dtos.InitApiResponse{
 			IfcId:   ifcId,
 			Status:  false,
-			Message: "Logbook flight did not match",
+			Message: constants.StatusLogbookMismatch,
 			Steps:   steps,
-		}, "Unable to find user flight history", nil
+		}, constants.StatusLogbookMismatch, nil
 	}
 
 	if data.UserDB != nil {
@@ -143,13 +114,13 @@ outer:
 		return &dtos.InitApiResponse{
 			IfcId:   ifcId,
 			Status:  false,
-			Message: "User already registered",
+			Message: constants.StatusAlreadyPresent,
 			Steps:   steps,
-		}, "User already Present", nil
+		}, constants.StatusAlreadyPresent, nil
 	}
 
 	insData := &entities.User{
-		DiscordID:     claims.UserID(),
+		DiscordID:     claims.DiscordUserID(),
 		IsActive:      true,
 		IFCommunityID: ifcId,
 		IFApiID:       &data.IFProfile.UserID,
@@ -161,14 +132,14 @@ outer:
 		return &dtos.InitApiResponse{
 			IfcId:   ifcId,
 			Status:  false,
-			Message: "Unable to insert",
-		}, "Unable to Insert", nil
+			Message: constants.StatusInsertFailed,
+		}, constants.StatusInsertFailed, nil
 	}
 
 	return &dtos.InitApiResponse{
 		IfcId:   ifcId,
 		Status:  true,
-		Message: "User has been registered",
+		Message: constants.StatusRegistered,
 	}, "", nil
 
 }
@@ -228,4 +199,92 @@ func (svc *RegistrationService) UserValidation(ctx stdContext.Context, ifcId str
 		UserDB:    user,
 		IFProfile: &statsResp.Result[0],
 	}, nil
+}
+
+func (svc *RegistrationService) findRecentFlightRoute(userID string) (string, error) {
+	for page := 1; page <= 3; page++ {
+		fltResp, _, err := svc.LiveAPI.GetUserFlights(userID, page)
+		if err != nil {
+			return "", fmt.Errorf("failed to fetch user flights: %w", err)
+		}
+		for _, flight := range fltResp.Flights {
+			if flight.OriginAirport != "" && flight.DestinationAirport != "" {
+				return fmt.Sprintf("%s-%s", flight.OriginAirport, flight.DestinationAirport), nil
+			}
+		}
+	}
+	return "", errors.New("no recent flight found")
+}
+
+func (svc *RegistrationService) InitServerRegistration(ctx stdContext.Context, code string, cPfx string, cSfx string, name string) (bool, []dtos.RegistrationStep, error) {
+	var steps []dtos.RegistrationStep
+	claims := context.GetUserClaims(ctx)
+
+	errResp := errors.New("Failed to register server")
+
+	steps = append(steps, dtos.RegistrationStep{
+		Name:    "ip_val",
+		Status:  true,
+		Message: "Inputs validated",
+	})
+
+	if code == "" || (cPfx == "" && cSfx == "") {
+		steps[0].Status = false
+		steps[0].Message = "Inputs validation failed"
+		return false, steps, errResp
+	}
+
+	steps = append(steps, dtos.RegistrationStep{
+		Name:    "unique_server",
+		Status:  true,
+		Message: "Server not present already",
+	})
+	if claims.ServerID() != "" {
+		steps[1].Status = false
+		steps[1].Message = "Server already present in database"
+		return false, steps, errResp
+	}
+
+	steps = append(steps, dtos.RegistrationStep{
+		Status:  true,
+		Name:    "validated_user",
+		Message: "Is a registered user",
+	})
+	if claims.UserID() == "" {
+		steps[2].Status = false
+		steps[2].Message = "User not registered. Please use /register to register yourself"
+		return false, steps, errResp
+	}
+
+	steps = append(steps, dtos.RegistrationStep{
+		Status:  true,
+		Name:    "database_insert",
+		Message: "VA Inserted successfully",
+	})
+
+	va := &entities.VA{
+		DiscordID:      claims.DiscordServerID(),
+		Code:           code,
+		IsActive:       true,
+		Name:           name,
+		CallsignPrefix: cPfx,
+		CallsignSuffix: cSfx,
+	}
+
+	_, err := svc.VARepository.InsertVAWithAdmin(ctx, va, claims.UserID())
+	if err != nil {
+		steps = append(steps, dtos.RegistrationStep{
+			Name:    "db_tx",
+			Status:  false,
+			Message: "Failed to save VA and user",
+		})
+		return false, steps, err
+	}
+
+	steps = append(steps, dtos.RegistrationStep{
+		Name:    "db_tx",
+		Status:  true,
+		Message: "VA and admin membership committed",
+	})
+	return true, steps, nil
 }

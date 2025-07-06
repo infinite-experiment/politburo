@@ -166,6 +166,13 @@ type RegistrationStep struct {
 	Message string `json:"message"`
 }
 
+type InitServerResponse struct {
+	VACode  string             `json:"va_code"`
+	Status  bool               `json:"status"`
+	Message string             `json:"message,omitempty"`
+	Steps   []RegistrationStep `json:"steps"`
+}
+
 type UserFlightsResponse struct {
 	PageIndex   int               `json:"pageIndex"`
 	TotalPages  int               `json:"totalPages"`
