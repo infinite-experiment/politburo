@@ -9,6 +9,28 @@ const (
 	DELETE FROM users where discord_id IS NOT NULL
 	`
 
+	DeleteAllRoles = `
+	DELETE FROM va_user_roles where id IS NOT NULL
+	`
+
+	DeleteAllServers = `
+	DELETE FROM virtual_airlines where id IS NOT NULL
+	`
+
+	GetVAConfigs = `
+	SELECT id, va_id, config_key, config_value, created_at, updated_at
+	FROM va_configs
+	WHERE va_id = $1	`
+
+	UpsertVAConfig = `
+	INSERT INTO va_configs (va_id, config_key, config_value)
+	VALUES ($1, $2, $3)
+	ON CONFLICT (va_id, config_key)
+	DO UPDATE SET
+		config_value = EXCLUDED.config_value,
+		updated_at = NOW();
+	`
+
 	GetStatusByApiKey = `
 	SELECT id, status from api_keys where id = $1
 	`
@@ -29,10 +51,8 @@ const (
 		name,
 		code,
 		discord_server_id,
-		callsign_prefix,
-		callsign_suffix,
 		is_active
-	) VALUES ($1, $2, $3, $4, $5, $6)
+	) VALUES ($1, $2, $3, $4)
 	RETURNING id, created_at, updated_at;
 	`
 

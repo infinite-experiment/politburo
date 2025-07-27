@@ -11,7 +11,15 @@ type LiveApiUserStatsReq struct {
 
 type InitServerRequest struct {
 	VACode string `json:"va_code"  validate:"required,min=3,max=4"`
-	Prefix string `json:"prefix,omitempty" validate:"max=10"`
-	Suffix string `json:"suffix,omitempty" validate:"max=10"`
 	VAName string `json:"name" validate:"required"`
+}
+
+type VAConfig struct {
+	ConfigKey string `json:"config_key" validate:"required"`
+	ConfigVal string `json:"config_value" validate:"required"`
+}
+
+type VAConfigKeys struct {
+	ConfigKeys []string `json:"config_keys"`
+	ConfVals   []string `json:"samp"`
 }

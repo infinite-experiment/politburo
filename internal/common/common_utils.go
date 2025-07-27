@@ -94,3 +94,11 @@ func GetShortLiveryName(name string) string {
 	}
 	return strings.ToUpper(name)
 }
+
+// ParseLiveAPITime converts strings like
+// "2025-07-27 09:57:51Z"  →  time.Time (UTC)
+func ParseLiveAPITime(s string) (time.Time, error) {
+	const layout = "2006-01-02 15:04:05Z07:00" // space-separated, UTC suffix
+
+	return time.Parse(layout, s)
+}

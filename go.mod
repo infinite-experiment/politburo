@@ -9,6 +9,7 @@ require (
 	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/swaggo/http-swagger v1.3.4
 	github.com/swaggo/swag v1.16.4
+	golang.org/x/sync v0.13.0
 	golang.org/x/time v0.11.0
 )
 

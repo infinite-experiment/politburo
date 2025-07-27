@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"infinite-experiment/politburo/internal/common"
 	"infinite-experiment/politburo/internal/constants"
 	ctxutil "infinite-experiment/politburo/internal/context"
@@ -27,10 +28,10 @@ func InitRegisterServer(regService *services.RegistrationService) http.HandlerFu
 		// ── 2. Pull claims (optional) & LOG everything ──────────────
 		claims := ctxutil.GetUserClaims(r.Context())
 
-		log.Printf("[InitServer] guild=%s user=%s  ▶  va_code=%q prefix=%q suffix=%q",
-			claims.ServerID(), claims.UserID(), req.VACode, req.Prefix, req.Suffix)
+		log.Printf("[InitServer] guild=%s user=%s  ▶  va_code=%q ",
+			claims.ServerID(), claims.UserID(), req.VACode)
 
-		status, steps, err := regService.InitServerRegistration(r.Context(), req.VACode, req.Prefix, req.Suffix, req.VAName)
+		status, steps, err := regService.InitServerRegistration(r.Context(), req.VACode, req.VAName)
 
 		if err != nil {
 			resp := dtos.APIResponse{
@@ -58,6 +59,72 @@ func InitRegisterServer(regService *services.RegistrationService) http.HandlerFu
 				Message: "Request Processed Successfully",
 				Steps:   steps,
 			},
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(resp)
+	}
+}
+
+func GetVAConfigs(cfgSvc *common.VAConfigService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		initTime := time.Now()
+
+		claims := ctxutil.GetUserClaims(r.Context())
+		cfgs, _ := cfgSvc.GetAllConfigValues(r.Context(), claims.ServerID())
+
+		resp := dtos.APIResponse{
+			Status:       strconv.FormatBool(true),
+			ResponseTime: common.GetResponseTime(initTime),
+			Data:         cfgs,
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(resp)
+	}
+}
+
+func ListConfigKeys(cfgSvc *common.VAConfigService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		initTime := time.Now()
+		cfgs := cfgSvc.ListPossibleKeys()
+
+		resp := dtos.APIResponse{
+			Status:       strconv.FormatBool(true),
+			ResponseTime: common.GetResponseTime(initTime),
+			Data: dtos.VAConfigKeys{
+				ConfigKeys: cfgs,
+			},
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(resp)
+	}
+}
+
+func SetConfigKeys(cfgSvc *common.VAConfigService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		initTime := time.Now()
+		var req dtos.VAConfig
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "invalid JSON", http.StatusBadRequest)
+			return
+		}
+		fmt.Printf("\nKey: %s\nVal: %s\n", req.ConfigKey, req.ConfigVal)
+		res, err := cfgSvc.SetVaConfig(r.Context(), req.ConfigKey, req.ConfigVal)
+
+		msg := "Config set successfully"
+
+		if err != nil {
+			fmt.Printf("\nPANIC | ERROR \n%v\n", err)
+			msg = err.Error()
+		}
+
+		resp := dtos.APIResponse{
+			Status:       strconv.FormatBool(true),
+			ResponseTime: common.GetResponseTime(initTime),
+			Message:      msg,
+			Data:         res,
 		}
 
 		w.Header().Set("Content-Type", "application/json")

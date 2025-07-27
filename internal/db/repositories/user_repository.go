@@ -41,17 +41,17 @@ func (r *UserRepository) FindUserByDiscordId(ctx context.Context, discordId stri
 }
 
 func (r *UserRepository) DeleteAllUsers(ctx context.Context) error {
-	err := r.db.QueryRowxContext(ctx, constants.DeleteAllUsers)
-	log.Printf("Query output: %v", err)
+	err2 := r.db.QueryRowxContext(ctx, constants.DeleteAllRoles)
+	err1 := r.db.QueryRowxContext(ctx, constants.DeleteAllServers)
+	err3 := r.db.QueryRowxContext(ctx, constants.DeleteAllUsers)
+	log.Printf("Query output: %v \n ===== \n %v \n =========\n %v", err1, err2, err3)
 	return nil
 }
 
 func (r *UserRepository) FindUserMembership(ctx context.Context, sDiscordId string, uDiscordId string) (*entities.Membership, error) {
 	var membership entities.Membership
 
-	log.Printf("\nChecking membership for: %s - %s", uDiscordId, sDiscordId)
 	if err := r.db.GetContext(ctx, &membership, constants.GetUserMembership, sDiscordId, uDiscordId); err != nil {
-		log.Printf("Error running membership query: %v", err)
 		return nil, err
 	}
 

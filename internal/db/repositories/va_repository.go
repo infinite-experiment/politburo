@@ -24,8 +24,6 @@ func (r *VARepository) InsertVA(ctx context.Context, va *entities.VA) error {
 		va.Name,
 		va.Code,
 		va.DiscordID,
-		va.CallsignPrefix,
-		va.CallsignSuffix,
 		va.IsActive).StructScan(va)
 }
 
@@ -56,8 +54,6 @@ func (r *VARepository) InsertVAWithAdmin(
 		va.Name,
 		va.Code,
 		va.DiscordID,
-		va.CallsignPrefix,
-		va.CallsignSuffix,
 		va.IsActive,
 	); err != nil {
 		return nil, fmt.Errorf("insert VA: %w", err)
@@ -86,4 +82,19 @@ func (r *VARepository) InsertVAWithAdmin(
 		return nil, err
 	}
 	return m, nil
+}
+
+func (r *VARepository) GetVAConfigs(ctx context.Context, vaID string) (*[]entities.VAConfig, error) {
+	var configs []entities.VAConfig
+
+	if err := r.db.SelectContext(ctx, &configs, constants.GetVAConfigs, vaID); err != nil {
+		return nil, err
+	}
+
+	return &configs, nil
+}
+
+func (r *VARepository) UpsertVAConfig(ctx context.Context, vaID, key, value string) error {
+	_, err := r.db.ExecContext(ctx, constants.UpsertVAConfig, vaID, key, value)
+	return err
 }

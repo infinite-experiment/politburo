@@ -35,6 +35,9 @@ docker-compose -f docker-compose.prod.yml up -d --build api
 docker exec -it $(docker ps -qf "name=db") psql -U ieuser -d infinite
 ```
 
+psql -U ieuser -d infinite -h db -f /path/to/migrations/001_create_tables.sql
+
+
 ### 💻 From Host (with Postgres installed)
 ```bash
 psql -h localhost -p 5432 -U ieuser -d infinite

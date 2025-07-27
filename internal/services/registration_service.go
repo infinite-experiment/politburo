@@ -47,6 +47,18 @@ func (svc *RegistrationService) InitUserRegistration(ctx stdContext.Context, ifc
 	steps = append(steps, dtos.RegistrationStep{
 		Name: "if_api&duplicacy_check", Status: true, Message: "Validated at Live API. User not duplicate.",
 	})
+	if claims.UserID() != "" {
+		log.Printf("\nUser already registered: %s", claims.UserID())
+		steps[0].Message = "User already registered"
+		steps[0].Status = false
+		return &dtos.InitApiResponse{
+			IfcId:   ifcId,
+			Status:  false,
+			Message: constants.StatusRegistrationInit,
+			Steps:   steps,
+		}, constants.StatusError, nil
+	}
+
 	data, err := svc.UserValidation(ctx, ifcId)
 
 	if err != nil {
@@ -133,6 +145,7 @@ func (svc *RegistrationService) InitUserRegistration(ctx stdContext.Context, ifc
 			IfcId:   ifcId,
 			Status:  false,
 			Message: constants.StatusInsertFailed,
+			Steps:   steps,
 		}, constants.StatusInsertFailed, nil
 	}
 
@@ -140,6 +153,7 @@ func (svc *RegistrationService) InitUserRegistration(ctx stdContext.Context, ifc
 		IfcId:   ifcId,
 		Status:  true,
 		Message: constants.StatusRegistered,
+		Steps:   steps,
 	}, "", nil
 
 }
@@ -216,7 +230,7 @@ func (svc *RegistrationService) findRecentFlightRoute(userID string) (string, er
 	return "", errors.New("no recent flight found")
 }
 
-func (svc *RegistrationService) InitServerRegistration(ctx stdContext.Context, code string, cPfx string, cSfx string, name string) (bool, []dtos.RegistrationStep, error) {
+func (svc *RegistrationService) InitServerRegistration(ctx stdContext.Context, code string, name string) (bool, []dtos.RegistrationStep, error) {
 	var steps []dtos.RegistrationStep
 	claims := context.GetUserClaims(ctx)
 
@@ -228,7 +242,7 @@ func (svc *RegistrationService) InitServerRegistration(ctx stdContext.Context, c
 		Message: "Inputs validated",
 	})
 
-	if code == "" || (cPfx == "" && cSfx == "") {
+	if code == "" {
 		steps[0].Status = false
 		steps[0].Message = "Inputs validation failed"
 		return false, steps, errResp
@@ -263,12 +277,10 @@ func (svc *RegistrationService) InitServerRegistration(ctx stdContext.Context, c
 	})
 
 	va := &entities.VA{
-		DiscordID:      claims.DiscordServerID(),
-		Code:           code,
-		IsActive:       true,
-		Name:           name,
-		CallsignPrefix: cPfx,
-		CallsignSuffix: cSfx,
+		DiscordID: claims.DiscordServerID(),
+		Code:      code,
+		IsActive:  true,
+		Name:      name,
 	}
 
 	_, err := svc.VARepository.InsertVAWithAdmin(ctx, va, claims.UserID())

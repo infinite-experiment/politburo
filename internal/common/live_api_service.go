@@ -8,7 +8,6 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"net/http/httputil"
 	"os"
 	"time"
 
@@ -84,11 +83,11 @@ func (svc *LiveAPIService) doPost(
 	req.Header.Set("Content-Type", "application/json")
 
 	// 3) log full request
-	if dumpReq, err := httputil.DumpRequestOut(req, true); err == nil {
-		log.Printf("→ HTTP Request:\n%s\n", dumpReq)
-	} else {
-		log.Printf("→ Request dump error: %v\n", err)
-	}
+	// if dumpReq, err := httputil.DumpRequestOut(req, true); err == nil {
+	// 	log.Printf("→ HTTP Request:\n%s\n", dumpReq)
+	// } else {
+	// 	log.Printf("→ Request dump error: %v\n", err)
+	// }
 
 	// 4) do request
 	resp, err := svc.Client.Do(req)
@@ -98,16 +97,16 @@ func (svc *LiveAPIService) doPost(
 	defer resp.Body.Close()
 
 	// 5) log headers (no body)
-	if dumpRespHeader, err := httputil.DumpResponse(resp, false); err == nil {
-		log.Printf("← HTTP Response Headers:\n%s\n", dumpRespHeader)
-	}
+	// if dumpRespHeader, err := httputil.DumpResponse(resp, false); err == nil {
+	// 	log.Printf("← HTTP Response Headers:\n%s\n", dumpRespHeader)
+	// }
 
 	// 6) read & log body
 	bodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return resp.StatusCode, err
 	}
-	log.Printf("← HTTP Response Body:\n%s\n", string(bodyBytes))
+	// log.Printf("← HTTP Response Body:\n%s\n", string(bodyBytes))
 
 	// 7) restore Body for JSON decode
 	resp.Body = io.NopCloser(bytes.NewReader(bodyBytes))
@@ -179,12 +178,13 @@ func (svc *LiveAPIService) GetATC() (*dtos.ATCResponse, int, error) {
 }
 
 // Flights
-func (svc *LiveAPIService) GetFlights() (*dtos.FlightsResponse, int, error) {
+func (svc *LiveAPIService) GetFlights(sId string) (*dtos.FlightsResponse, int, error) {
 	var r dtos.FlightsResponse
-	status, err := svc.doGET("/flights", &r)
+	status, err := svc.doGET("/sessions/"+sId+"/flights", &r)
 	if err != nil {
 		return nil, status, err
 	}
+
 	return &r, status, nil
 }
 
@@ -233,3 +233,36 @@ func (svc *LiveAPIService) GetATIS() (*dtos.ATISResponse, int, error) {
 	}
 	return &r, status, nil
 }
+
+func (svc *LiveAPIService) GetFlightPlan(sessionID, flightID string) (*dtos.FlightPlanResponse, int, error) {
+
+	var wrap dtos.FlightPlanWrapper
+	endpoint := "/sessions/" + sessionID + "/flights/" + flightID + "/flightplan"
+
+	status, err := svc.doGET(endpoint, &wrap)
+	if err != nil {
+		return nil, status, err
+	}
+	if wrap.ErrorCode != 0 {
+		return nil, status,
+			fmt.Errorf("live-api returned errorCode %d", wrap.ErrorCode)
+	}
+	return &wrap.Result, status, nil
+}
+
+// func dumpJSONBody(r io.Reader) (pretty string, reread io.Reader, err error) {
+// 	raw, err := io.ReadAll(r)
+// 	if err != nil {
+// 		return "", nil, err
+// 	}
+
+// 	var buf bytes.Buffer
+// 	if err := json.Indent(&buf, raw, "", "  "); err != nil {
+// 		// not JSON; fall back to raw
+// 		pretty = string(raw)
+// 	} else {
+// 		pretty = buf.String()
+// 	}
+// 	// give the caller a new reader so they can decode again
+// 	return pretty, bytes.NewReader(raw), nil
+// }

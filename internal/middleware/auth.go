@@ -4,7 +4,6 @@ import (
 	"infinite-experiment/politburo/internal/auth"
 	"infinite-experiment/politburo/internal/context"
 	"infinite-experiment/politburo/internal/db/repositories"
-	"log"
 	"net/http"
 	"strings"
 )
@@ -17,16 +16,14 @@ func AuthMiddleware(userRepo *repositories.UserRepository, keysRepo *repositorie
 			authHeader := r.Header.Get("Authorization")
 			apiKey := r.Header.Get("X-API-Key")
 
-			log.Printf("API_KEY: %q, Authorization: %q", apiKey, authHeader)
-
 			var claims auth.UserClaims
 
 			switch {
 			case strings.HasPrefix(authHeader, "Bearer "):
 				// Parse JWT and validate
 				claims = &auth.JWTClaims{
-					UserIDValue: "user123",
-					RoleValue:   "PILOT",
+					UserUUID:  "user123",
+					RoleValue: "PILOT",
 				}
 				http.Error(w, "Unauthorized. Missing API Key", http.StatusUnauthorized)
 				return
@@ -48,7 +45,6 @@ func AuthMiddleware(userRepo *repositories.UserRepository, keysRepo *repositorie
 				}
 
 				claims = auth.MakeClaimsFromApi(r.Context(), userRepo, serverId, userId)
-				log.Printf("Claims: %v", claims)
 
 			default:
 				http.Error(w, "Unauthorized. Unknown Error", http.StatusUnauthorized)
