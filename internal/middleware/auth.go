@@ -2,7 +2,7 @@ package middleware
 
 import (
 	"infinite-experiment/politburo/internal/auth"
-	"infinite-experiment/politburo/internal/context"
+	context "infinite-experiment/politburo/internal/auth"
 	"infinite-experiment/politburo/internal/db/repositories"
 	"net/http"
 	"strings"

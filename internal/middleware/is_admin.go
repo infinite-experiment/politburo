@@ -1,8 +1,8 @@
 package middleware
 
 import (
+	context "infinite-experiment/politburo/internal/auth"
 	"infinite-experiment/politburo/internal/constants"
-	"infinite-experiment/politburo/internal/context"
 	"net/http"
 )
 

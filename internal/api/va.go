@@ -3,9 +3,9 @@ package api
 import (
 	"encoding/json"
 	"fmt"
+	ctxutil "infinite-experiment/politburo/internal/auth"
 	"infinite-experiment/politburo/internal/common"
 	"infinite-experiment/politburo/internal/constants"
-	ctxutil "infinite-experiment/politburo/internal/context"
 	"infinite-experiment/politburo/internal/models/dtos"
 	"infinite-experiment/politburo/internal/services"
 	"log"
@@ -105,13 +105,15 @@ func ListConfigKeys(cfgSvc *common.VAConfigService) http.HandlerFunc {
 func SetConfigKeys(cfgSvc *common.VAConfigService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		initTime := time.Now()
-		var req dtos.VAConfig
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+
+		cfgs := make(map[string]string)
+
+		if err := json.NewDecoder(r.Body).Decode(&cfgs); err != nil {
 			http.Error(w, "invalid JSON", http.StatusBadRequest)
 			return
 		}
-		fmt.Printf("\nKey: %s\nVal: %s\n", req.ConfigKey, req.ConfigVal)
-		res, err := cfgSvc.SetVaConfig(r.Context(), req.ConfigKey, req.ConfigVal)
+
+		res, err := cfgSvc.SetVaConfig(r.Context(), cfgs)
 
 		msg := "Config set successfully"
 

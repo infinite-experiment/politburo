@@ -4,8 +4,8 @@ import (
 	stdCtx "context"
 	"errors"
 	"fmt"
+	"infinite-experiment/politburo/internal/auth"
 	"infinite-experiment/politburo/internal/constants"
-	"infinite-experiment/politburo/internal/context"
 	"infinite-experiment/politburo/internal/db/repositories"
 	"time"
 )
@@ -19,26 +19,51 @@ const (
 	ConfigKeyTest           = "test"
 	ConfigKeyCallsignPrefix = "callsign_prefix"
 	ConfigKeyCallsignSuffix = "callsign_suffix"
+	ConfigKeyAirtableAPIKey = "airtable_api_key"
+	ConfigKeyAirtableVABase = "airtable_va_base"
+
+	// New table keys
+	ConfigKeyATTablePilots = "at_table_pilots"
+	ConfigKeyATTableRoutes = "at_table_routes"
+	ConfigKeyATTablePIREPs = "at_table_pireps"
+
+	// Field mapping keys
+	ConfigKeyATFieldPilotsCallsign   = "at_field_pilots_callsign"
+	ConfigKeyATFieldRoutesOrigin     = "at_field_routes_origin"
+	ConfigKeyATFieldRoutesDest       = "at_field_routes_dest"
+	ConfigKeyATFieldRoutesRoute      = "at_field_routes_route"
+	ConfigKeyATFieldPIREPsCallsign   = "at_field_pireps_callsign"
+	ConfigKeyATFieldPIREPsRoute      = "at_field_pireps_route"
+	ConfigKeyATFieldPIREPsFlightTime = "at_field_pireps_ft"
+
+	ConfigKeyATFieldLastModified = "at_field_last_modified"
 )
 
-var AllowedVAConfigKeys = []string{
-	ConfigKeyIFServerID,
-	ConfigKeyTest,
-	ConfigKeyCallsignPrefix,
-	ConfigKeyCallsignSuffix,
+var AllowedVAConfigKeys = map[string]struct{}{
+	ConfigKeyIFServerID:              {},
+	ConfigKeyTest:                    {},
+	ConfigKeyCallsignPrefix:          {},
+	ConfigKeyCallsignSuffix:          {},
+	ConfigKeyAirtableAPIKey:          {},
+	ConfigKeyAirtableVABase:          {},
+	ConfigKeyATTablePilots:           {},
+	ConfigKeyATTableRoutes:           {},
+	ConfigKeyATTablePIREPs:           {},
+	ConfigKeyATFieldPilotsCallsign:   {},
+	ConfigKeyATFieldRoutesOrigin:     {},
+	ConfigKeyATFieldRoutesDest:       {},
+	ConfigKeyATFieldPIREPsCallsign:   {},
+	ConfigKeyATFieldPIREPsRoute:      {},
+	ConfigKeyATFieldPIREPsFlightTime: {},
+	ConfigKeyATFieldLastModified:     {},
+	ConfigKeyATFieldRoutesRoute:      {},
 }
 
-// String slice ready for JSON response
-func ListAllowedVAConfigKeys() []string { return AllowedVAConfigKeys }
+func ListAllowedVAConfigKeys() []string { return GetKeysStructMap(AllowedVAConfigKeys) }
 
-// O(n) validator (fine for small list)
 func IsValidVAConfigKey(k string) bool {
-	for _, allowed := range AllowedVAConfigKeys {
-		if allowed == k {
-			return true
-		}
-	}
-	return false
+	_, ok := AllowedVAConfigKeys[k]
+	return ok
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -66,25 +91,28 @@ func (s *VAConfigService) ListPossibleKeys() []string { return ListAllowedVAConf
 // ---------------------------------------------------------------------------
 func (s *VAConfigService) SetVaConfig(
 	ctx stdCtx.Context,
-	key string,
-	value string,
+	cfgs map[string]string,
 ) (*map[string]string, error) {
 
-	if !IsValidVAConfigKey(key) {
-		return nil, fmt.Errorf("%q is not a valid key", key)
+	claims := auth.GetUserClaims(ctx)
+	fmt.Printf("Request Map: \n %v", cfgs)
+	for key, value := range cfgs {
+
+		if !IsValidVAConfigKey(key) {
+			return nil, fmt.Errorf("%q is not a valid key", key)
+		}
+
+		va_id := claims.ServerID()
+
+		// upsert
+		if err := s.repo.UpsertVAConfig(ctx, va_id, key, value); err != nil {
+			return nil, fmt.Errorf("failed to set config: %w", err)
+		}
+		cKey := configCacheKey(va_id)
+		fmt.Printf("Evicting: %s", cKey)
+
+		s.cache.Delete(cKey)
 	}
-
-	claims := context.GetUserClaims(ctx)
-	va_id := claims.ServerID()
-
-	// upsert
-	if err := s.repo.UpsertVAConfig(ctx, va_id, key, value); err != nil {
-		return nil, fmt.Errorf("failed to set config: %w", err)
-	}
-	cKey := configCacheKey(va_id)
-	fmt.Printf("Evicting: %s", cKey)
-
-	s.cache.Delete(cKey)
 
 	cfgs, err := s.GetAllConfigValues(ctx, claims.ServerID())
 	if err != nil {
@@ -134,15 +162,43 @@ func (s *VAConfigService) GetConfigVal(
 	ctx stdCtx.Context,
 	vaID string,
 	key string, // callers import ConfigKeyIFServerID etc.
-) (string, error) {
+) (string, bool) {
 
 	if !IsValidVAConfigKey(key) {
-		return "", fmt.Errorf("%q is not a valid key", key)
+		return "", false
 	}
 
 	cfgs, err := s.GetAllConfigValues(ctx, vaID)
 	if err != nil {
-		return "", err
+		return "", false
 	}
-	return cfgs[key], nil
+	return cfgs[key], true
+}
+
+func (s *VAConfigService) GetConfigValues(
+	ctx stdCtx.Context,
+	vaID string,
+	keys []string, // callers import ConfigKeyIFServerID etc.
+) (map[string]string, bool) {
+
+	conf := make(map[string]string, len(keys))
+	cfgs, err := s.GetAllConfigValues(ctx, vaID)
+
+	if err != nil {
+		return conf, false
+	}
+
+	for _, key := range keys {
+		if !IsValidVAConfigKey(key) {
+			return conf, false
+		}
+		val, ok := cfgs[key]
+		if ok {
+			conf[key] = val
+		} else {
+			conf[key] = ""
+		}
+	}
+
+	return conf, true
 }

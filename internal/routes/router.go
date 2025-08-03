@@ -41,12 +41,15 @@ func RegisterRoutes(upSince time.Time) http.Handler {
 	// services
 	userRepo := repositories.NewUserRepository(db.DB)
 	keyRepo := repositories.NewApiKeysRepo(db.DB)
+	syncRepo := repositories.NewSyncRepository(db.DB)
 
 	cacheSvc := common.NewCacheService(60000, 600)
 	liveSvc := common.NewLiveAPIService()
 	vaRepo := repositories.NewVARepository(db.DB)
 	regSvc := services.NewRegistrationService(liveSvc, *cacheSvc, *userRepo, *vaRepo)
 	cfgSvc := common.NewVAConfigService(vaRepo, cacheSvc)
+	atApiSvc := common.NewAirtableApiService(cfgSvc)
+	syncSvc := services.NewAtSyncService(cacheSvc, syncRepo)
 	flightSvc := services.NewFlightsService(cacheSvc, liveSvc, cfgSvc)
 
 	r.Get("/public/flight", api.UserFlightMapHandler(cacheSvc))
@@ -56,41 +59,48 @@ func RegisterRoutes(upSince time.Time) http.Handler {
 	go workers.StartCacheFiller(cacheSvc, liveSvc)
 	// API v1 routes
 	r.Route("/api/v1", func(v1 chi.Router) {
-		v1.Use(middleware.AuthMiddleware(userRepo, keyRepo))
+		v1.Use(middleware.AuthMiddleware(userRepo, keyRepo)) // global: all routes must be authenticated
 
-		v1.Group(func(god chi.Router) {
-			god.Use(middleware.IsGodMiddleware())
-			god.Delete("/users/delete", api.DeleteAllUsers(userRepo))
+		// Registered users group
+		v1.Group(func(registered chi.Router) {
+			// God-only group (admin + staff + member + registered)
+			v1.Group(func(god chi.Router) {
+				god.Use(middleware.IsGodMiddleware())
+
+				god.Delete("/users/delete", api.DeleteAllUsers(userRepo))
+			})
+			registered.Use(middleware.IsRegisteredMiddleware())
+
+			registered.Post("/server/init", api.InitRegisterServer(regSvc))
+
+			// Member-only group (requires registered first)
+			registered.Group(func(member chi.Router) {
+				member.Use(middleware.IsMemberMiddleware())
+
+				member.Get("/va/live", api.VaFlightsHandler(flightSvc))
+				member.Get("/live/sessions", api.LiveServers(flightSvc))
+
+				// Staff-only group (requires member + registered)
+				member.Group(func(staff chi.Router) {
+					staff.Use(middleware.IsStaffMiddleware())
+
+					staff.Get("/user/{user_id}/flights", api.UserFlightsHandler(flightSvc))
+
+					// Admin-only group (staff + member + registered)
+					staff.Group(func(admin chi.Router) {
+						admin.Use(middleware.IsAdminMiddleware())
+
+						admin.Post("/va/configs", api.SetConfigKeys(cfgSvc))
+						admin.Get("/va/configs", api.GetVAConfigs(cfgSvc))
+						admin.Get("/va/configs/keys", api.ListConfigKeys(cfgSvc))
+						admin.Get("/debug", api.DebugHandler(*atApiSvc, *syncSvc))
+
+					})
+				})
+			})
 		})
 
-		// Admin routes
-		v1.Group(func(admin chi.Router) {
-			admin.Use(middleware.IsAdminMiddleware())
-			admin.Post("/va/configs", api.SetConfigKeys(cfgSvc))
-			admin.Get("/va/configs", api.GetVAConfigs(cfgSvc))
-			admin.Get("/va/configs/keys", api.ListConfigKeys(cfgSvc))
-		})
-
-		// Pilot routes
-		v1.Group(func(pilot chi.Router) {
-			pilot.Use(middleware.IsMemberMiddleware())
-			pilot.Get("/va/live", api.VaFlightsHandler(flightSvc))
-			pilot.Get("/live/sessions", api.LiveServers(flightSvc))
-		})
-
-		// Staff routes
-		v1.Group(func(staff chi.Router) {
-			staff.Use(middleware.IsStaffMiddleware())
-			staff.Get("/user/{user_id}/flights", api.UserFlightsHandler(flightSvc))
-		})
-
-		// Registered users routes
-		v1.Group(func(mem chi.Router) {
-			mem.Use(middleware.IsRegisteredMiddleware())
-			mem.Post("/server/init", api.InitRegisterServer(regSvc))
-		})
-
-		// Publicly open routes
+		// Public
 		v1.Post("/user/register/init", api.InitUserRegistrationHandler(regSvc))
 	})
 

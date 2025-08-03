@@ -14,6 +14,24 @@ func GetResponseTime(init time.Time) string {
 	return fmt.Sprintf("%dms", timeDiff)
 }
 
+func GetKeysStringMap(m map[string]string) []string {
+	keys := make([]string, 0, len(m))
+	for k, _ := range m {
+		keys = append(keys, k)
+	}
+	return keys
+
+}
+
+func GetKeysStructMap(m map[string]struct{}) []string {
+	keys := make([]string, 0, len(m))
+	for k, _ := range m {
+		keys = append(keys, k)
+	}
+	return keys
+
+}
+
 func GetAircraftLivery(livId string, c *CacheService) *dtos.AircraftLivery {
 	val, res := c.Get(string(constants.CachePrefixLiveries) + livId)
 

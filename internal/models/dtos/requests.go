@@ -14,10 +14,7 @@ type InitServerRequest struct {
 	VAName string `json:"name" validate:"required"`
 }
 
-type VAConfig struct {
-	ConfigKey string `json:"config_key" validate:"required"`
-	ConfigVal string `json:"config_value" validate:"required"`
-}
+type VAConfig map[string]string
 
 type VAConfigKeys struct {
 	ConfigKeys []string `json:"config_keys"`
