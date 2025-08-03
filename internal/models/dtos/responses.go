@@ -59,29 +59,25 @@ type ATCEntry struct {
 
 // ---- FLIGHTS ----
 type FlightsResponse struct {
-	Flights []FlightEntry `json:"Flights"`
+	Flights []FlightEntry `json:"result"`
 }
 type FlightEntry struct {
-	ID            string    `json:"Id"`
-	UserID        string    `json:"UserID"`
-	Username      string    `json:"Username"`
-	FlightPlanID  string    `json:"FlightPlanID"`
-	Server        int       `json:"Server"`
-	StartTime     time.Time `json:"StartTime"`
-	EndTime       time.Time `json:"EndTime"`
-	AircraftID    int       `json:"AircraftID"`
-	LiveryID      int       `json:"LiveryID"`
-	Latitude      float64   `json:"Latitude"`
-	Longitude     float64   `json:"Longitude"`
-	Altitude      int       `json:"Altitude"`
-	Heading       float64   `json:"Heading"`
-	Speed         float64   `json:"Speed"`
-	VerticalSpeed float64   `json:"VerticalSpeed"`
-	Status        int       `json:"Status"`
-	Origin        string    `json:"Origin"`
-	Destination   string    `json:"Destination"`
-	FlightPlan    string    `json:"FlightPlan"`
-	// Add other fields as needed from docs
+	Username            string  `json:"username"`
+	Callsign            string  `json:"callsign"`
+	Latitude            float64 `json:"latitude"`
+	Longitude           float64 `json:"longitude"`
+	Altitude            float64 `json:"altitude"` // docs show float
+	Speed               float64 `json:"speed"`
+	VerticalSpeed       float64 `json:"verticalSpeed"`
+	Track               float64 `json:"track"`      // a.k.a. heading/course
+	LastReport          string  `json:"lastReport"` // RFC3339 / ISO-8601
+	FlightID            string  `json:"flightId"`
+	UserID              string  `json:"userId"`
+	AircraftID          string  `json:"aircraftId"`
+	LiveryID            string  `json:"liveryId"`
+	VirtualOrganization string  `json:"virtualOrganization"`
+	PilotState          int     `json:"pilotState"`
+	IsConnected         bool    `json:"isConnected"`
 }
 
 // ---- AIRCRAFT LIVERIES ----
@@ -166,6 +162,13 @@ type RegistrationStep struct {
 	Message string `json:"message"`
 }
 
+type InitServerResponse struct {
+	VACode  string             `json:"va_code"`
+	Status  bool               `json:"status"`
+	Message string             `json:"message,omitempty"`
+	Steps   []RegistrationStep `json:"steps"`
+}
+
 type UserFlightsResponse struct {
 	PageIndex   int               `json:"pageIndex"`
 	TotalPages  int               `json:"totalPages"`
@@ -233,4 +236,29 @@ type FlightPosition struct {
 	Date        time.Time `json:"date"`
 	ID          *string   `json:"id"`
 	FID         string    `json:"fid"`
+}
+
+type LiveFlight struct {
+	Callsign       string `json:"callsign"`
+	CallsignVar    string `json:"callsignVar"`
+	CallsignPrefix string `json:"callsignPrefix"`
+	CallsignSuffix string `json:"callsignSuffix"`
+
+	SessionID  string `json:"sessionID"`
+	FlightID   string `json:"flightID"`
+	AircraftId string `json:"aircraftID"`
+	LiveryId   string `json:"liveryID"`
+	Username   string `json:"username"`
+	UserID     string `json:"userID"`
+
+	Aircraft string `json:"aircraft"`
+	Livery   string `json:"livery"`
+
+	AltitudeFt  int    `json:"altitude"`
+	SpeedKts    int    `json:"speed"`
+	Origin      string `json:"origin"`
+	Destination string `json:"destination"`
+
+	ReportTime  time.Time `json:"lastReport"`
+	IsConnected bool      `json:"isConnected"`
 }

@@ -29,3 +29,20 @@ func (cs *CacheService) Get(key string) (interface{}, bool) {
 func (cs *CacheService) Delete(key string) {
 	cs.cache.Delete(key)
 }
+
+func (cs *CacheService) GetOrSet(
+	key string,
+	duration time.Duration,
+	loader func() (any, error)) (interface{}, error) {
+	if val, found := cs.Get(key); found {
+		return val, nil
+	}
+
+	val, err := loader()
+	if err != nil {
+		return nil, err
+	}
+
+	cs.Set(key, val, duration)
+	return val, nil
+}

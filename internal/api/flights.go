@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"time"
 
+	context "infinite-experiment/politburo/internal/auth"
 	"infinite-experiment/politburo/internal/common"
 	"infinite-experiment/politburo/internal/constants"
 	"infinite-experiment/politburo/internal/models/dtos"
@@ -82,6 +83,49 @@ func UserFlightsHandler(fltSvc *services.FlightsService) http.HandlerFunc {
 		}
 		// Send JSON
 		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(resp)
+	}
+}
+
+func VaFlightsHandler(fltSvc *services.FlightsService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		initTime := time.Now()
+		claims := context.GetUserClaims(r.Context())
+
+		f, err := fltSvc.GetVALiveFlights(r.Context(), claims.ServerID())
+
+		msg := "Live flights fetched"
+		if err != nil {
+			msg = err.Error()
+		}
+		resp := dtos.APIResponse{
+			Status:       string(constants.APIStatusError),
+			Message:      msg,
+			ResponseTime: common.GetResponseTime(initTime),
+			Data:         f,
+		}
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(resp)
+	}
+}
+
+func LiveServers(fltSvc *services.FlightsService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		initTime := time.Now()
+
+		servers, err := fltSvc.GetLiveServers()
+
+		msg := ""
+		if err != nil {
+			msg = err.Error()
+		}
+		resp := dtos.APIResponse{
+			Status:       string(constants.APIStatusError),
+			Message:      msg,
+			ResponseTime: common.GetResponseTime(initTime),
+			Data:         servers,
+		}
+		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(resp)
 	}
 }

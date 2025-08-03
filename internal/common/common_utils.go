@@ -14,6 +14,24 @@ func GetResponseTime(init time.Time) string {
 	return fmt.Sprintf("%dms", timeDiff)
 }
 
+func GetKeysStringMap(m map[string]string) []string {
+	keys := make([]string, 0, len(m))
+	for k, _ := range m {
+		keys = append(keys, k)
+	}
+	return keys
+
+}
+
+func GetKeysStructMap(m map[string]struct{}) []string {
+	keys := make([]string, 0, len(m))
+	for k, _ := range m {
+		keys = append(keys, k)
+	}
+	return keys
+
+}
+
 func GetAircraftLivery(livId string, c *CacheService) *dtos.AircraftLivery {
 	val, res := c.Get(string(constants.CachePrefixLiveries) + livId)
 
@@ -93,4 +111,12 @@ func GetShortLiveryName(name string) string {
 		return strings.ToUpper(string(runes[:4]))
 	}
 	return strings.ToUpper(name)
+}
+
+// ParseLiveAPITime converts strings like
+// "2025-07-27 09:57:51Z"  →  time.Time (UTC)
+func ParseLiveAPITime(s string) (time.Time, error) {
+	const layout = "2006-01-02 15:04:05Z07:00" // space-separated, UTC suffix
+
+	return time.Parse(layout, s)
 }
