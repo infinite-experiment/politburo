@@ -65,7 +65,7 @@ func RegisterRoutes(upSince time.Time) http.Handler {
 		// Registered users group
 		v1.Group(func(registered chi.Router) {
 			// God-only group (admin + staff + member + registered)
-			v1.Group(func(god chi.Router) {
+			registered.Group(func(god chi.Router) {
 				god.Use(middleware.IsGodMiddleware())
 				god.Post("/va/setRole", api.SyncUser(vaMgmtSvc))
 				god.Delete("/users/delete", api.DeleteAllUsers(userRepo))
@@ -83,10 +83,8 @@ func RegisterRoutes(upSince time.Time) http.Handler {
 
 				// Staff-only group (requires member + registered)
 				member.Group(func(staff chi.Router) {
-					staff.Get("/user/{user_id}/flights", api.UserFlightsHandler(flightSvc, cfgSvc))
 					staff.Use(middleware.IsStaffMiddleware())
-
-					staff.Get("/user/{user_id}/flights", api.UserFlightsHandler(flightSvc))
+					staff.Get("/user/{user_id}/flights", api.UserFlightsHandler(flightSvc, cfgSvc))
 
 					// Admin-only group (staff + member + registered)
 					staff.Group(func(admin chi.Router) {
