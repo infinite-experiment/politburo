@@ -129,10 +129,9 @@ func (s *VAConfigService) GetAllConfigValues(
 	vaID string,
 ) (map[string]string, error) {
 
-	ttl := 10 * time.Minute
 	cacheKey := configCacheKey(vaID)
 
-	val, err := s.cache.GetOrSet(cacheKey, ttl, func() (any, error) {
+	val, err := s.cache.GetOrSet(cacheKey, 10*time.Minute, func() (any, error) {
 		rows, err := s.repo.GetVAConfigs(ctx, vaID)
 		if err != nil {
 			return nil, err

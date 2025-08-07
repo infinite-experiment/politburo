@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"time"
 
+	"infinite-experiment/politburo/internal/auth"
 	context "infinite-experiment/politburo/internal/auth"
 	"infinite-experiment/politburo/internal/common"
 	"infinite-experiment/politburo/internal/constants"
@@ -28,7 +29,7 @@ import (
 // @Success      200           {object} dtos.APIResponse
 // @Failure      400,500       {object} dtos.APIResponse
 // @Router       /api/v1/user/{user_id}/flights [get]
-func UserFlightsHandler(fltSvc *services.FlightsService) http.HandlerFunc {
+func UserFlightsHandler(fltSvc *services.FlightsService, vaConf *common.VAConfigService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		initTime := time.Now()
 
@@ -62,8 +63,24 @@ func UserFlightsHandler(fltSvc *services.FlightsService) http.HandlerFunc {
 			}
 		}
 
+		ctx := r.Context()
+		claims := auth.GetUserClaims(ctx)
+
+		serverId, ok := vaConf.GetConfigVal(r.Context(), claims.ServerID(), common.ConfigKeyIFServerID)
+
+		if !ok {
+			resp := dtos.APIResponse{
+				Status:       string(constants.APIStatusError),
+				Message:      "IF Server not configured for VA",
+				ResponseTime: common.GetResponseTime(initTime),
+			}
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(resp)
+			return
+		}
+
 		// Call service
-		dto, err := fltSvc.GetUserFlights(userID, page)
+		dto, err := fltSvc.GetUserFlights(userID, page, serverId)
 		if err != nil {
 			resp := dtos.APIResponse{
 				Status:       string(constants.APIStatusError),
