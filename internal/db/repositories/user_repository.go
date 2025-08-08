@@ -2,6 +2,9 @@ package repositories
 
 import (
 	"context"
+	"database/sql"
+	"errors"
+	"fmt"
 	"log"
 
 	"infinite-experiment/politburo/internal/constants"
@@ -67,6 +70,21 @@ func (r *UserRepository) InsertMembership(
 		constants.InsertMembership,
 		m.UserID,
 		m.VAID,
-		m.Role, // enums.RoleAdmin etc.
+		m.Role,
+		m.Callsign, // enums.RoleAdmin etc.
 	).Scan(&m.ID, &m.JoinedAt)
+}
+
+func (r *UserRepository) UpdateUserRole(ctx context.Context, vaID, userID, newRole string) (*entities.Membership, error) {
+	var role entities.Membership
+	err := r.db.QueryRowContext(ctx, constants.UpdateMembershipRole, vaID, userID, newRole).
+		Scan(&role.Role)
+
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, fmt.Errorf("user not found in this VA: %w", err)
+		}
+		return nil, fmt.Errorf("error updating role: %w", err)
+	}
+	return &role, nil
 }

@@ -64,9 +64,19 @@ const (
 	INSERT INTO va_user_roles (
 		user_id,
 		va_id,
-		role
-	) VALUES ($1, $2, $3)
+		role,
+		callsign
+	) VALUES ($1, $2, $3, $4)
 	RETURNING id, joined_at;
+	`
+
+	UpdateMembershipRole = `
+	UPDATE va_user_roles
+	SET role = $3,
+	    updated_at = NOW()
+	WHERE va_id = $1
+	  AND user_id = $2
+	RETURNING id, role, updated_at;
 	`
 
 	GetUserMembership = `
@@ -93,6 +103,24 @@ const (
 		(SELECT id   FROM u) AS user_id,   -- NULL if user absent
 		(SELECT id   FROM v) AS va_id,     -- NULL if VA   absent
 		(SELECT role FROM r) AS role;      -- NULL if no link
+
+	`
+
+	UpsertMembership = `
+	INSERT INTO va_user_roles (
+		va_id,
+		user_id,
+		role,
+		is_active,
+		joined_at
+	) VALUES (
+		$1, $2, $3, $4, NOW()
+	)
+	ON CONFLICT (va_id, user_id)
+	DO UPDATE SET
+		role = EXCLUDED.role,
+		is_active = EXCLUDED.is_active,
+		joined_at = NOW();
 
 	`
 )

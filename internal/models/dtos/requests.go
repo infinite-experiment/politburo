@@ -5,6 +5,16 @@ type InitUserRegistrationReq struct {
 	LastFlight string `json:"last_flight"`
 }
 
+type SyncUser struct {
+	UserID   string `json:"user_id"`
+	Callsign string `json:"callsign"`
+}
+
+type SetRole struct {
+	UserID string `json:"user_id"`
+	Role   string `json:"role"`
+}
+
 type LiveApiUserStatsReq struct {
 	DiscourseNames []string `json:"discourseNames"`
 }
