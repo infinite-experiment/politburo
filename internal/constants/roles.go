@@ -10,7 +10,7 @@ type VARole string
 
 const (
 	RolePilot          VARole = "pilot"
-	RoleAirlineManager VARole = "airline_manager"
+	RoleAirlineManager VARole = "staff"
 	RoleAdmin          VARole = "admin"
 )
 
