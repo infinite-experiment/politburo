@@ -30,4 +30,5 @@ type UserVARole struct {
 	Role     constants.VARole `db:"role"`
 	IsActive bool             `db:"is_active"`
 	JoinedAt time.Time        `db:"joined_at"`
+	Callsign string           `db:"callsign"`
 }

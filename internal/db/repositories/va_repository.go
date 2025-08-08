@@ -65,6 +65,7 @@ func (r *VARepository) InsertVAWithAdmin(
 		VAID:     va.ID,
 		Role:     constants.RoleAdmin,
 		IsActive: true,
+		Callsign: "",
 	}
 
 	if err := tx.QueryRowxContext(
@@ -73,6 +74,7 @@ func (r *VARepository) InsertVAWithAdmin(
 		m.UserID,
 		m.VAID,
 		m.Role,
+		m.Callsign,
 	).Scan(&m.ID, &m.JoinedAt); err != nil {
 		return nil, fmt.Errorf("insert membership: %w", err)
 	}

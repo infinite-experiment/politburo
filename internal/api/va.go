@@ -133,3 +133,70 @@ func SetConfigKeys(cfgSvc *common.VAConfigService) http.HandlerFunc {
 		json.NewEncoder(w).Encode(resp)
 	}
 }
+
+func SyncUser(mgmtSvc *services.VAManagementService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		initTime := time.Now()
+
+		var req dtos.SyncUser
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "invalid JSON", http.StatusBadRequest)
+			return
+		}
+
+		status, err := mgmtSvc.SyncUser(r.Context(), req.UserID, req.Callsign)
+		if err != nil {
+			resp := dtos.APIResponse{
+				Status:       string(constants.APIStatusError),
+				Message:      status,
+				ResponseTime: common.GetResponseTime(initTime),
+			}
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(resp)
+			return
+		}
+
+		resp := dtos.APIResponse{
+			Status:       status,
+			ResponseTime: common.GetResponseTime(initTime),
+			Message:      status,
+		}
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(resp)
+	}
+}
+
+func SetRole(mgmtSvc *services.VAManagementService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		initTime := time.Now()
+
+		log.Printf("Request received")
+		var req dtos.SetRole
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "invalid JSON", http.StatusBadRequest)
+			return
+		}
+
+		_, err := mgmtSvc.UpdateUserRole(r.Context(), req.UserID, req.Role)
+
+		if err != nil {
+			resp := dtos.APIResponse{
+				Status:       string(constants.APIStatusError),
+				Message:      err.Error(),
+				ResponseTime: common.GetResponseTime(initTime),
+			}
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(resp)
+			return
+		}
+
+		resp := dtos.APIResponse{
+			Status:       string(constants.APIStatusOk),
+			ResponseTime: common.GetResponseTime(initTime),
+			Message:      "Role updated!",
+		}
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(resp)
+
+	}
+}

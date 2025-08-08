@@ -14,7 +14,7 @@ func IsGodMiddleware() func(http.Handler) http.Handler {
 			claims := context.GetUserClaims(r.Context())
 			log.Printf("Discurd User ID: %s", claims.DiscordUserID())
 
-			if claims.DiscordUserID() != "988020008665882624" {
+			if claims.DiscordUserID() != "668664447950127154" {
 				http.Error(w, "Unauthorized. Need VA Admin perms", http.StatusUnauthorized)
 				return
 			}
