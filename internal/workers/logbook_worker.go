@@ -5,11 +5,13 @@ import (
 	"infinite-experiment/politburo/internal/common"
 	"infinite-experiment/politburo/internal/constants"
 	"infinite-experiment/politburo/internal/models/dtos"
+	"time"
 )
 
 type LogbookRequest struct {
-	FlightId string
-	Flight   dtos.UserFlightEntry
+	FlightId  string
+	Flight    dtos.UserFlightEntry
+	SessionId string
 }
 
 var LogbookQueue = make(chan LogbookRequest, 100)
@@ -28,14 +30,9 @@ func LogbookWorker(c *common.CacheService, liveApiService *common.LiveAPIService
 			continue
 		}
 
-		session := common.GetSessionId(c, req.Flight.Server)
-		if session == nil {
-			fmt.Printf("⚠️  No session ID found for server: %s\n", req.Flight.Server)
-			continue
-		}
-
+		session := req.SessionId
 		// Call the Live API
-		data, _, err := liveApiService.GetFlightRoute(req.FlightId, *session)
+		data, _, err := liveApiService.GetFlightRoute(req.FlightId, session)
 		if err != nil {
 			fmt.Printf("❌ Error fetching flight path: %v\n", err)
 			continue
@@ -96,7 +93,7 @@ func LogbookWorker(c *common.CacheService, liveApiService *common.LiveAPIService
 			Dest:   destNode,
 		}
 
-		c.Set(cacheKey, flightInfo, 600000)
+		c.Set(cacheKey, flightInfo, 600000*time.Second)
 		fmt.Printf("✅ Cached %d points for flight %s\nCACHE_KEY=%s", len(data.Result), req.FlightId, cacheKey)
 
 	}

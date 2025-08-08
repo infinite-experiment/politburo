@@ -114,7 +114,7 @@ func (svc *FlightsService) getUserFlightsCached(userID string, page int) (*dtos.
 	return flts, nil
 }
 
-func (svc *FlightsService) GetUserFlights(userId string, page int) (*dtos.FlightHistoryDto, error) {
+func (svc *FlightsService) GetUserFlights(userId string, page int, sID string) (*dtos.FlightHistoryDto, error) {
 
 	response := &dtos.FlightHistoryDto{
 		PageNo:  page,
@@ -185,7 +185,7 @@ func (svc *FlightsService) GetUserFlights(userId string, page int) (*dtos.Flight
 		}
 		if rec.OriginAirport != "" && rec.DestinationAirport != "" && rec.TotalTime > 0 && time.Since(rec.Created) <= 72*time.Hour {
 			select {
-			case workers.LogbookQueue <- workers.LogbookRequest{FlightId: rec.ID, Flight: rec}:
+			case workers.LogbookQueue <- workers.LogbookRequest{FlightId: rec.ID, Flight: rec, SessionId: sID}:
 				dto.MapUrl = fmt.Sprintf("https://%s%s", "comradebot.cc?i=", rec.ID)
 				//dto.MapUrl = ""
 			default:
@@ -438,7 +438,7 @@ func (svc *FlightsService) GetLiveServers() (*[]dtos.Session, error) {
 	}
 
 	sessions := &data.Result
-	svc.Cache.Set(cacheKey, sessions, 5) // 5 minutes
+	svc.Cache.Set(cacheKey, sessions, 5*time.Minute) // 5 minutes
 
 	return sessions, nil
 }
