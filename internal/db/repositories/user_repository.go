@@ -54,7 +54,7 @@ func (r *UserRepository) DeleteAllUsers(ctx context.Context) error {
 func (r *UserRepository) FindUserMembership(ctx context.Context, sDiscordId string, uDiscordId string) (*entities.Membership, error) {
 	var membership entities.Membership
 
-	if err := r.db.GetContext(ctx, &membership, constants.GetUserMembership, sDiscordId, uDiscordId); err != nil {
+	if err := r.db.GetContext(ctx, &membership, constants.GetUserMembership, uDiscordId, sDiscordId); err != nil {
 		return nil, err
 	}
 

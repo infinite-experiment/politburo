@@ -8,7 +8,7 @@ import (
 
 func MakeClaimsFromApi(ctx context.Context, userRepo *repositories.UserRepository, serverId string, userId string) *APIKeyClaims {
 
-	member, err := userRepo.FindUserMembership(ctx, userId, serverId)
+	member, err := userRepo.FindUserMembership(ctx, serverId, userId)
 	if err != nil {
 		// Return a minimal claims object; UUIDs stay empty
 		return &APIKeyClaims{

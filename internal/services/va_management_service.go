@@ -36,7 +36,7 @@ func (s *VAManagementService) SyncUser(ctx context.Context, userID string, calls
 		return fmt.Sprintf("User not registered: %s", err.Error()), err
 	}
 
-	tmp, err := s.UserRepo.FindUserMembership(ctx, claims.DiscordServerID(), claims.DiscordUserID())
+	tmp, err := s.UserRepo.FindUserMembership(ctx, claims.DiscordServerID(), u.ID)
 	if err != nil {
 		return fmt.Sprintf("Error querying database: %s", err.Error()), err
 	}
@@ -69,13 +69,16 @@ func (s *VAManagementService) SyncUser(ctx context.Context, userID string, calls
 func (s *VAManagementService) UpdateUserRole(ctx context.Context, userID string, newRole string) (*entities.Membership, error) {
 	claims := auth.GetUserClaims(ctx)
 
-	_, err := s.UserRepo.FindUserMembership(ctx, claims.DiscordServerID(), userID)
-	if err != nil {
+	log.Printf("Updating for %s", userID)
+	mem, err := s.UserRepo.FindUserMembership(ctx, claims.DiscordServerID(), userID)
+	if err != nil || mem == nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, fmt.Errorf("user is not yet synced to this VA; please sync before assigning a role")
 		}
 		return nil, err
 	}
 
-	return s.UserRepo.UpdateUserRole(ctx, claims.ServerID(), claims.UserID(), newRole)
+	log.Printf("Membership: %v", *mem.UserID)
+
+	return s.UserRepo.UpdateUserRole(ctx, claims.ServerID(), *mem.UserID, newRole)
 }

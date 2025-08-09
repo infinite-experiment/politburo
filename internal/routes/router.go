@@ -85,11 +85,13 @@ func RegisterRoutes(upSince time.Time) http.Handler {
 				member.Group(func(staff chi.Router) {
 					staff.Use(middleware.IsStaffMiddleware())
 					staff.Get("/user/{user_id}/flights", api.UserFlightsHandler(flightSvc, cfgSvc))
+					staff.Post("/va/userSync", api.SyncUser(vaMgmtSvc))
 
 					// Admin-only group (staff + member + registered)
 					staff.Group(func(admin chi.Router) {
 						admin.Use(middleware.IsAdminMiddleware())
 
+						admin.Post("/va/setRole", api.SetRole(vaMgmtSvc))
 						admin.Post("/va/configs", api.SetConfigKeys(cfgSvc))
 						admin.Get("/va/configs", api.GetVAConfigs(cfgSvc))
 						admin.Get("/va/configs/keys", api.ListConfigKeys(cfgSvc))
