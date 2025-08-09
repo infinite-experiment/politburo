@@ -76,7 +76,7 @@ const (
 	    updated_at = NOW()
 	WHERE va_id = $1
 	  AND user_id = $2
-	RETURNING id, role, updated_at;
+	RETURNING role;
 	`
 
 	GetUserMembership = `

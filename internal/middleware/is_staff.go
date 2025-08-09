@@ -4,6 +4,7 @@ import (
 	context "infinite-experiment/politburo/internal/auth"
 	"infinite-experiment/politburo/internal/constants"
 	"net/http"
+	"os"
 )
 
 func IsStaffMiddleware() func(http.Handler) http.Handler {
@@ -12,13 +13,13 @@ func IsStaffMiddleware() func(http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
 			claims := context.GetUserClaims(r.Context())
+			god_key := os.Getenv("GOD_MODE")
 
-			if claims.Role() == constants.RoleAirlineManager.String() || claims.Role() == constants.RoleAdmin.String() {
+			if claims.Role() == constants.RoleAirlineManager.String() || claims.Role() == constants.RoleAdmin.String() || (god_key != "" && claims.DiscordUserID() == god_key) {
 				next.ServeHTTP(w, r)
 				return
 			}
 			http.Error(w, "Unauthorized. Need staff perms", http.StatusUnauthorized)
-			return
 		})
 	}
 }

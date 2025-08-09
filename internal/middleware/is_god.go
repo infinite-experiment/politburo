@@ -4,6 +4,7 @@ import (
 	context "infinite-experiment/politburo/internal/auth"
 	"log"
 	"net/http"
+	"os"
 )
 
 func IsGodMiddleware() func(http.Handler) http.Handler {
@@ -14,11 +15,13 @@ func IsGodMiddleware() func(http.Handler) http.Handler {
 			claims := context.GetUserClaims(r.Context())
 			log.Printf("Discurd User ID: %s", claims.DiscordUserID())
 
-			if claims.DiscordUserID() != "668664447950127154" {
-				http.Error(w, "Unauthorized. Need VA Admin perms", http.StatusUnauthorized)
+			god_key := os.Getenv("GOD_MODE")
+
+			if god_key != "" && claims.DiscordUserID() == god_key {
+				next.ServeHTTP(w, r)
 				return
 			}
-			next.ServeHTTP(w, r)
+			http.Error(w, "Unauthorized. Need VA Admin perms", http.StatusUnauthorized)
 
 		})
 	}
