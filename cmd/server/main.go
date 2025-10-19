@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -24,13 +25,26 @@ func main() {
 	log.SetOutput(os.Stdout)
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 
-	// Connect to DB
+	// Connect to DB with sqlx
 	if err := db.InitPostgres(); err != nil {
-		log.Fatalf("❌ Failed to connect to Postgres: %v", err)
+		log.Fatalf("❌ Failed to connect to Postgres (sqlx): %v", err)
 	}
+	log.Println("✅ Connected to Postgres (sqlx)!")
+
+	// Connect to DB with GORM
+	host := os.Getenv("PG_HOST")
+	port := os.Getenv("PG_PORT")
+	user := os.Getenv("PG_USER")
+	dbname := os.Getenv("PG_DB")
+	password := os.Getenv("PG_PASSWORD")
+	dsn := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable", user, password, host, port, dbname)
+
+	if _, err := db.InitPostgresORM(dsn); err != nil {
+		log.Fatalf("❌ Failed to connect to Postgres (GORM): %v", err)
+	}
+	log.Println("✅ Connected to Postgres (GORM)!")
 
 	upSince := time.Now()
-	log.Println("✅ Connected to Postgres!")
 
 	// Initialize router with Chi
 	router := routes.RegisterRoutes(upSince)

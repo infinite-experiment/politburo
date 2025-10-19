@@ -3,8 +3,8 @@ package workers
 import (
 	"fmt"
 	"infinite-experiment/politburo/internal/common"
-	"infinite-experiment/politburo/internal/constants"
 	"infinite-experiment/politburo/internal/models/dtos"
+	"log"
 	"time"
 )
 
@@ -12,21 +12,25 @@ type LogbookRequest struct {
 	FlightId  string
 	Flight    dtos.UserFlightEntry
 	SessionId string
+	CacheKey  string
 }
 
 var LogbookQueue = make(chan LogbookRequest, 100)
 
 func LogbookWorker(c *common.CacheService, liveApiService *common.LiveAPIService) {
+	log.Printf("[DEBUG] LogbookWorker started, queue_addr=%p", LogbookQueue)
 	for req := range LogbookQueue {
 
-		cacheKey := string(constants.CachePrefixFlightHistory) + req.FlightId
+		fmt.Printf("✅ Logbook queue called for %s points for flight %s", req.SessionId, req.FlightId)
+
+		cacheKey := req.CacheKey
 
 		if req.Flight.DestinationAirport == "" || req.Flight.OriginAirport == "" {
-			fmt.Println("❌ Skipping: missing origin or destination")
+			log.Println("❌ Skipping: missing origin or destination")
 			continue
 		}
 		if val, found := c.Get(cacheKey); found && val != nil {
-			fmt.Printf("⚠️  Flight %s already cached, skipping\n", req.FlightId)
+			log.Printf("⚠️  Flight %s already cached, skipping\n", req.FlightId)
 			continue
 		}
 
@@ -38,14 +42,30 @@ func LogbookWorker(c *common.CacheService, liveApiService *common.LiveAPIService
 			continue
 		}
 
+		var (
+			maxGS  int
+			maxAlt int
+		)
+
 		var waypoints []dtos.RouteWaypoint
 		for _, pos := range data.Result {
+			gs := int(pos.GroundSpeed)
+			alt := int(pos.Altitude)
 			waypoints = append(waypoints, dtos.RouteWaypoint{
-				Lat:       fmt.Sprintf("%f", pos.Latitude),
-				Long:      fmt.Sprintf("%f", pos.Longitude),
-				Altitude:  int(pos.Altitude),
-				Timestamp: pos.Date,
+				Lat:         fmt.Sprintf("%f", pos.Latitude),
+				Long:        fmt.Sprintf("%f", pos.Longitude),
+				Altitude:    int(pos.Altitude),
+				Timestamp:   pos.Date,
+				GroundSpeed: gs,
 			})
+
+			if gs > maxGS {
+				maxGS = gs
+			}
+
+			if alt > maxAlt {
+				maxAlt = alt
+			}
 		}
 
 		originNode := dtos.RouteNode{
@@ -82,7 +102,8 @@ func LogbookWorker(c *common.CacheService, liveApiService *common.LiveAPIService
 			Meta: dtos.FlightMeta{
 				Aircraft:   aircraftName,
 				Livery:     liveryName,
-				MaxSpeed:   0,
+				MaxSpeed:   maxGS,
+				MaxAlt:     maxAlt,
 				Violations: len(req.Flight.Violations),
 				Landings:   req.Flight.LandingCount,
 				Duration:   hours*60 + minutes,
@@ -94,7 +115,7 @@ func LogbookWorker(c *common.CacheService, liveApiService *common.LiveAPIService
 		}
 
 		c.Set(cacheKey, flightInfo, 600000*time.Second)
-		fmt.Printf("✅ Cached %d points for flight %s\nCACHE_KEY=%s", len(data.Result), req.FlightId, cacheKey)
+		log.Printf("✅ Cached %d points for flight %s\nCACHE_KEY=%s", len(data.Result), req.FlightId, cacheKey)
 
 	}
 }

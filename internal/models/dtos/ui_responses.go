@@ -5,7 +5,8 @@ import "time"
 type FlightMeta struct {
 	Aircraft   string    `json:"aircraft"`
 	Livery     string    `json:"livery"`
-	MaxSpeed   float32   `json:"maxSpeed"`
+	MaxSpeed   int       `json:"maxSpeed"`
+	MaxAlt     int       `json:"maxAlt"`
 	Violations int       `json:"violations"`
 	Landings   int       `json:"landings"`
 	Duration   int       `json:"durationSeconds"`
@@ -13,10 +14,11 @@ type FlightMeta struct {
 }
 
 type RouteWaypoint struct {
-	Lat       string    `json:"lat"`
-	Long      string    `json:"long"`
-	Timestamp time.Time `json:"timestamp"`
-	Altitude  int       `json:"alt"`
+	Lat         string    `json:"lat"`
+	Long        string    `json:"long"`
+	Timestamp   time.Time `json:"timestamp"`
+	Altitude    int       `json:"alt"`
+	GroundSpeed int       `json:"gs"`
 }
 
 type RouteNode struct {
@@ -31,4 +33,8 @@ type FlightInfo struct {
 	Route  []RouteWaypoint `json:"path"`
 	Origin RouteNode       `json:"origin"`
 	Dest   RouteNode       `json:"dest"`
+}
+
+type UserFlights struct {
+	Flights []FlightSummary `json:"flights"`
 }

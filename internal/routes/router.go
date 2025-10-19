@@ -5,14 +5,12 @@ import (
 	"time"
 
 	"infinite-experiment/politburo/internal/api"
-	"infinite-experiment/politburo/internal/common"
 	"infinite-experiment/politburo/internal/db"
-	"infinite-experiment/politburo/internal/db/repositories"
 	"infinite-experiment/politburo/internal/middleware"
-	"infinite-experiment/politburo/internal/services"
 	"infinite-experiment/politburo/internal/workers"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/cors"
 	httpSwagger "github.com/swaggo/http-swagger"
 )
 
@@ -24,36 +22,43 @@ func RegisterRoutes(upSince time.Time) http.Handler {
 	// global middleware
 	//r.Use(middleware.Logging)
 
-	// r.Use(cors.Handler(cors.Options{
-	// 	AllowedOrigins:   []string{"https://*", "http://localhost:8081"}, // Allow all origins
-	// 	AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-	// 	AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
-	// 	ExposedHeaders:   []string{"Link"},
-	// 	AllowCredentials: false,
-	// 	MaxAge:           300, // Maximum value not ignored by any of major browsers
-	// }))
+	r.Use(cors.Handler(cors.Options{
+		AllowedOrigins:   []string{"https://*", "http://localhost:8081"}, // Allow all origins
+		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
+		ExposedHeaders:   []string{"Link"},
+		AllowCredentials: false,
+		MaxAge:           300, // Maximum value not ignored by any of major browsers
+	}))
 	// health check
 	r.Get("/healthCheck", api.HealthCheckHandler(db.DB, upSince))
 
 	// swagger UI
 	r.Handle("/swagger/*", httpSwagger.WrapHandler)
 
-	// services
-	userRepo := repositories.NewUserRepository(db.DB)
-	keyRepo := repositories.NewApiKeysRepo(db.DB)
-	syncRepo := repositories.NewSyncRepository(db.DB)
+	// Initialize dependencies using DI pattern
+	deps, err := api.InitDependencies()
+	if err != nil {
+		panic("Failed to initialize dependencies: " + err.Error())
+	}
 
-	cacheSvc := common.NewCacheService(60000, 600)
-	liveSvc := common.NewLiveAPIService()
-	vaRepo := repositories.NewVARepository(db.DB)
-	regSvc := services.NewRegistrationService(liveSvc, *cacheSvc, *userRepo, *vaRepo)
-	cfgSvc := common.NewVAConfigService(vaRepo, cacheSvc)
-	vaMgmtSvc := services.NewVAManagementService(*vaRepo, *userRepo)
-	atApiSvc := common.NewAirtableApiService(cfgSvc)
-	syncSvc := services.NewAtSyncService(cacheSvc, syncRepo)
-	flightSvc := services.NewFlightsService(cacheSvc, liveSvc, cfgSvc)
+	// Initialize handlers with dependencies
+	handlers := api.NewHandlers(deps)
+
+	// Legacy: Keep individual references for old handlers that haven't been migrated yet
+	userRepo := &deps.Repo.User
+	keyRepo := &deps.Repo.Keys
+	cacheSvc := &deps.Services.Cache
+	liveSvc := &deps.Services.Live
+	regSvc := &deps.Services.Reg
+	cfgSvc := &deps.Services.Conf
+	vaMgmtSvc := &deps.Services.VaMgmt
+	atApiSvc := &deps.Services.AirtableApi
+	syncSvc := &deps.Services.AirtableSync
+	flightSvc := &deps.Services.Flights
 
 	r.Get("/public/flight", api.UserFlightMapHandler(cacheSvc))
+	r.Get("/public/flight/user", api.UserFlightsCacheHandler(cacheSvc))
 
 	//Setup
 	go workers.LogbookWorker(cacheSvc, liveSvc)
@@ -67,8 +72,7 @@ func RegisterRoutes(upSince time.Time) http.Handler {
 			// God-only group (admin + staff + member + registered)
 			registered.Group(func(god chi.Router) {
 				god.Use(middleware.IsGodMiddleware())
-				god.Post("/va/setRole", api.SyncUser(vaMgmtSvc))
-				god.Delete("/users/delete", api.DeleteAllUsers(userRepo))
+				god.Delete("/users/delete", handlers.DeleteAllUsers()) // MIGRATED to DI
 			})
 			registered.Use(middleware.IsRegisteredMiddleware())
 
@@ -77,6 +81,9 @@ func RegisterRoutes(upSince time.Time) http.Handler {
 			// Member-only group (requires registered first)
 			registered.Group(func(member chi.Router) {
 				member.Use(middleware.IsMemberMiddleware())
+
+				// NEW: User details endpoint with GORM
+				member.Get("/user/details", handlers.GetUserDetails()) // MIGRATED to DI
 
 				member.Get("/va/live", api.VaFlightsHandler(flightSvc))
 				member.Get("/live/sessions", api.LiveServers(flightSvc))
@@ -103,7 +110,7 @@ func RegisterRoutes(upSince time.Time) http.Handler {
 		})
 
 		// Public
-		v1.Post("/user/register/init", api.InitUserRegistrationHandler(regSvc))
+		v1.Post("/user/register/init", handlers.InitUserRegistration()) // MIGRATED to DI
 	})
 
 	return r

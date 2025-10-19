@@ -34,7 +34,9 @@ func GetKeysStructMap(m map[string]struct{}) []string {
 
 func GetAircraftLivery(livId string, c *CacheService) *dtos.AircraftLivery {
 	val, res := c.Get(string(constants.CachePrefixLiveries) + livId)
+	log.Printf("Rslt: %v\nRes: %v", val, c)
 
+	log.Printf("Cache queried: %s", string(constants.CachePrefixLiveries)+livId)
 	if !res {
 		return nil
 	}
@@ -62,6 +64,14 @@ func GetSessionId(c *CacheService, server string) *string {
 	}
 	return nil
 }
+func ContainsFlightID(summaries []dtos.FlightSummary, id string) bool {
+	for _, f := range summaries {
+		if f.FlightID == id {
+			return true
+		}
+	}
+	return false
+}
 
 func GetFlightFromCache(c *CacheService, flightId string) *dtos.FlightInfo {
 
@@ -73,6 +83,23 @@ func GetFlightFromCache(c *CacheService, flightId string) *dtos.FlightInfo {
 
 	if flight, ok := val.(dtos.FlightInfo); ok {
 		return &flight
+	}
+	return nil
+}
+
+func GetUserFlightsFromCache(c *CacheService, userID string) *dtos.UserFlights {
+
+	log.Printf("\nFinding key: %s\n", string(constants.CachePrefixUserFlights)+userID)
+	val, found := c.Get(string(constants.CachePrefixUserFlights) + userID)
+	if !found {
+		return nil
+	}
+	log.Printf("\nData Found: %v\nType: %T", val, val)
+
+	if flight, ok := val.([]dtos.FlightSummary); ok {
+		return &dtos.UserFlights{
+			Flights: flight,
+		}
 	}
 	return nil
 }

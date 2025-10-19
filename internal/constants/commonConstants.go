@@ -22,6 +22,7 @@ const (
 	CacheKeyServers          CachePrefix = "LIVE_SERVERS"
 	CachePrefixLiveFlights   CachePrefix = "LIVE_FLIGHTS_"
 	CachePrefixFPL           CachePrefix = "LIVE_FPL_"
+	CachePrefixUserFlights   CachePrefix = "UFH_"
 
 	FilterUser      LogbookRequestFilter = "USER"
 	FilterDiscordId LogbookRequestFilter = "DISCORD_ID"

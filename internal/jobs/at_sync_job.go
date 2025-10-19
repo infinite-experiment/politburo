@@ -49,6 +49,9 @@ func SyncPilotsJob(
 
 		count++
 
+		log.Printf("[SyncPilotsJob] Error fetching records: %v", err)
+		log.Printf("[SyncPilotsJob] Error fetching records: %v", err)
+
 		if data.Offset == "" {
 			break
 		}
