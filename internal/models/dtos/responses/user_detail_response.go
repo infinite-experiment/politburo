@@ -28,8 +28,9 @@ type VAAffiliation struct {
 
 // CurrentVAStatus represents the user's status in the current VA context
 type CurrentVAStatus struct {
-	IsMember bool   `json:"is_member"`
-	Role     string `json:"role,omitempty"`
-	IsActive bool   `json:"is_active"`
-	Callsign string `json:"callsign,omitempty"`
+	IsMember     bool                   `json:"is_member"`
+	Role         string                 `json:"role,omitempty"`
+	IsActive     bool                   `json:"is_active"`
+	Callsign     string                 `json:"callsign,omitempty"`
+	AirtableData map[string]interface{} `json:"airtable_data,omitempty"` // Raw Airtable fields if user is a member
 }

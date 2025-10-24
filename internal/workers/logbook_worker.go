@@ -1,6 +1,7 @@
 package workers
 
 import (
+	"context"
 	"fmt"
 	"infinite-experiment/politburo/internal/common"
 	"infinite-experiment/politburo/internal/models/dtos"
@@ -17,7 +18,7 @@ type LogbookRequest struct {
 
 var LogbookQueue = make(chan LogbookRequest, 100)
 
-func LogbookWorker(c *common.CacheService, liveApiService *common.LiveAPIService) {
+func LogbookWorker(c *common.CacheService, liveApiService *common.LiveAPIService, liverySvc *common.AircraftLiveryService) {
 	log.Printf("[DEBUG] LogbookWorker started, queue_addr=%p", LogbookQueue)
 	for req := range LogbookQueue {
 
@@ -88,14 +89,12 @@ func LogbookWorker(c *common.CacheService, liveApiService *common.LiveAPIService
 		hours := int(req.Flight.TotalTime) / 60
 		minutes := int(req.Flight.TotalTime) % 60
 
-		eqpmnt := common.GetAircraftLivery(req.Flight.LiveryID, c)
-
+		// Use new livery service (cache-first, then DB)
 		aircraftName := ""
 		liveryName := ""
-
-		if eqpmnt != nil {
-			aircraftName = eqpmnt.AircraftName
-			liveryName = eqpmnt.LiveryName
+		if liveryData := liverySvc.GetAircraftLivery(context.Background(), req.Flight.LiveryID); liveryData != nil {
+			aircraftName = liveryData.AircraftName
+			liveryName = liveryData.LiveryName
 		}
 
 		flightInfo := dtos.FlightInfo{

@@ -26,7 +26,7 @@ func RegisterRoutes(upSince time.Time) http.Handler {
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   []string{"https://*", "http://localhost:8081"}, // Allow all origins
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
+		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token", "X-API-Key", "X-Server-Id", "X-Discord-Id"},
 		ExposedHeaders:   []string{"Link"},
 		AllowCredentials: false,
 		MaxAge:           300, // Maximum value not ignored by any of major browsers
@@ -44,7 +44,7 @@ func RegisterRoutes(upSince time.Time) http.Handler {
 	handlers := api.NewHandlers(deps)
 
 	// Legacy: Keep individual references for old handlers that haven't been migrated yet
-	userRepo := &deps.Repo.User
+	userRepoGorm := deps.Repo.UserGorm
 	keyRepo := &deps.Repo.Keys
 	legacyCacheSvc := deps.Services.LegacyCache
 	liveSvc := &deps.Services.Live
@@ -58,8 +58,8 @@ func RegisterRoutes(upSince time.Time) http.Handler {
 	r.Get("/public/flight/user", api.UserFlightsCacheHandler(legacyCacheSvc))
 
 	// Setup workers
-	go workers.LogbookWorker(legacyCacheSvc, liveSvc)
-	go workers.StartCacheFiller(legacyCacheSvc, liveSvc)
+	go workers.LogbookWorker(legacyCacheSvc, liveSvc, deps.Services.AircraftLivery)
+	go workers.StartCacheFiller(legacyCacheSvc, liveSvc, deps.Repo.AircraftLivery, deps.Services.AircraftLivery)
 
 	// Setup scheduled jobs
 	// Pilot sync job - syncs pilots from Airtable every hour
@@ -70,7 +70,7 @@ func RegisterRoutes(upSince time.Time) http.Handler {
 	jobsHandler := api.NewJobsHandler(pilotSyncJob)
 	// API v1 routes
 	r.Route("/api/v1", func(v1 chi.Router) {
-		v1.Use(middleware.AuthMiddleware(userRepo, keyRepo))      // global: all routes must be authenticated
+		v1.Use(middleware.AuthMiddleware(userRepoGorm, keyRepo))  // global: all routes must be authenticated (using GORM)
 		v1.Get("/user/details", handlers.GetUserDetails())        // MIGRATED to DI
 		v1.Get("/admin/verify-god", handlers.VerifyGodMode())     // God mode verification
 

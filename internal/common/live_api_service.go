@@ -180,6 +180,7 @@ func (svc *LiveAPIService) GetATC() (*dtos.ATCResponse, int, error) {
 // Flights
 func (svc *LiveAPIService) GetFlights(sId string) (*dtos.FlightsResponse, int, error) {
 	var r dtos.FlightsResponse
+	log.Printf("\nTrying to fetch flights for session: %s", sId)
 	status, err := svc.doGET("/sessions/"+sId+"/flights", &r)
 	if err != nil {
 		return nil, status, err

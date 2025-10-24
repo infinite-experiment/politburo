@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"infinite-experiment/politburo/internal/auth"
 	context "infinite-experiment/politburo/internal/auth"
 	"infinite-experiment/politburo/internal/common"
 	"infinite-experiment/politburo/internal/constants"
@@ -14,7 +15,7 @@ func IsAdminMiddleware() func(http.Handler) http.Handler {
 
 			claims := context.GetUserClaims(r.Context())
 
-			if claims.Role() != constants.RoleAdmin.String() {
+			if claims.Role() != constants.RoleAdmin.String() && !auth.IsGodMode(claims.DiscordUserID()) {
 				common.RespondPermissionDenied(w, "admin")
 				return
 			}

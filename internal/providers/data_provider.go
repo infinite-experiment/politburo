@@ -46,6 +46,7 @@ type SyncFilters struct {
 	ModifiedSince *string // ISO 8601 timestamp - fetch only records modified after this
 	Offset        string  // Pagination offset
 	Limit         int     // Max records to fetch
+	FilterFormula string  // Custom filter formula (e.g., Airtable formula for field matching)
 }
 
 // ValidationResult contains the results of config validation

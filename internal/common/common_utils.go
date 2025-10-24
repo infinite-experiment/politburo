@@ -32,22 +32,9 @@ func GetKeysStructMap(m map[string]struct{}) []string {
 
 }
 
-func GetAircraftLivery(livId string, c *CacheService) *dtos.AircraftLivery {
-	val, res := c.Get(string(constants.CachePrefixLiveries) + livId)
-	log.Printf("Rslt: %v\nRes: %v", val, c)
-
-	log.Printf("Cache queried: %s", string(constants.CachePrefixLiveries)+livId)
-	if !res {
-		return nil
-	}
-
-	eqpmnt, ok := val.(dtos.AircraftLivery)
-	if !ok {
-		return nil
-	}
-
-	return &eqpmnt
-}
+// GetAircraftLivery is DEPRECATED
+// Use AircraftLiveryService.GetAircraftLivery instead for DB-backed livery lookups
+// This function remains for backwards compatibility but will be removed in a future version
 
 func GetSessionId(c *CacheService, server string) *string {
 	val, found := c.Get(string(constants.CachePrefixWorldDetails))

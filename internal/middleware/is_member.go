@@ -13,10 +13,13 @@ func IsMemberMiddleware() func(http.Handler) http.Handler {
 
 			claims := context.GetUserClaims(r.Context())
 
-			if claims.Role() == "" {
+			// Check permissions BEFORE calling next handler
+			if claims.Role() == "" && !context.IsGodMode(claims.DiscordUserID()) {
 				common.RespondPermissionDenied(w, "member (pilot)")
 				return
 			}
+
+			// Only call next handler ONCE
 			next.ServeHTTP(w, r)
 		})
 	}

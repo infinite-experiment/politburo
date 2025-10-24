@@ -36,6 +36,7 @@ func NewJobsHandler(pilotSyncJob *jobs.PilotSyncJob) *JobsHandler {
 // @Router /api/v1/admin/jobs/sync-pilots [post]
 func (h *JobsHandler) TriggerPilotSync() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		return
 		start := time.Now()
 
 		// Parse optional request body

@@ -111,17 +111,24 @@ func VaFlightsHandler(fltSvc *services.FlightsService) http.HandlerFunc {
 
 		f, err := fltSvc.GetVALiveFlights(r.Context(), claims.ServerID())
 
+		status := constants.APIStatusOk
 		msg := "Live flights fetched"
+		httpStatus := http.StatusOK
+
 		if err != nil {
+			status = constants.APIStatusError
 			msg = err.Error()
+			httpStatus = http.StatusBadRequest
 		}
+
 		resp := dtos.APIResponse{
-			Status:       string(constants.APIStatusError),
+			Status:       string(status),
 			Message:      msg,
 			ResponseTime: common.GetResponseTime(initTime),
 			Data:         f,
 		}
-		w.WriteHeader(http.StatusOK)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(httpStatus)
 		json.NewEncoder(w).Encode(resp)
 	}
 }

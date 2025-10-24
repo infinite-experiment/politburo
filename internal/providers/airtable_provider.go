@@ -287,10 +287,16 @@ func (p *AirtableProvider) buildFetchPayload(schema *dtos.EntitySchema, filters 
 		payload["fields"] = fieldNames
 	}
 
-	// Add filter for modified since
-	if filters != nil && filters.ModifiedSince != nil && schema.LastModifiedField != "" {
-		formula := fmt.Sprintf("IS_AFTER({%s}, '%s')", schema.LastModifiedField, *filters.ModifiedSince)
-		payload["filterByFormula"] = formula
+	// Add filter - prioritize custom filter formula over modified since
+	if filters != nil {
+		if filters.FilterFormula != "" {
+			// Use custom filter formula if provided
+			payload["filterByFormula"] = filters.FilterFormula
+		} else if filters.ModifiedSince != nil && schema.LastModifiedField != "" {
+			// Fall back to modified since filter
+			formula := fmt.Sprintf("IS_AFTER({%s}, '%s')", schema.LastModifiedField, *filters.ModifiedSince)
+			payload["filterByFormula"] = formula
+		}
 	}
 
 	// Add pagination

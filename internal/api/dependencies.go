@@ -11,12 +11,13 @@ import (
 )
 
 type Repositories struct {
-	User           repositories.UserRepository
-	UserGorm       *repositories.UserRepositoryGORM
-	Keys           repositories.KeysRepo
-	UserVASync     repositories.SyncRepository
-	Va             repositories.VARepository
+	User            repositories.UserRepository
+	UserGorm        *repositories.UserRepositoryGORM
+	Keys            repositories.KeysRepo
+	UserVASync      repositories.SyncRepository
+	Va              repositories.VARepository
 	DataProviderCfg *repositories.DataProviderConfigRepo
+	AircraftLivery  *repositories.AircraftLiveryRepository
 }
 
 type Services struct {
@@ -33,6 +34,7 @@ type Services struct {
 	Flights            services.FlightsService
 	PilotStats         *services.PilotStatsService
 	DataProviderConfig *services.DataProviderConfigService
+	AircraftLivery     *common.AircraftLiveryService
 }
 type Dependencies struct {
 	Repo     *Repositories
@@ -48,6 +50,7 @@ func InitDependencies() (*Dependencies, error) {
 		Va:              *repositories.NewVARepository(db.DB),
 		UserVASync:      *repositories.NewSyncRepository(db.DB),
 		DataProviderCfg: repositories.NewDataProviderConfigRepo(db.PgDB),
+		AircraftLivery:  repositories.NewAircraftLiveryRepository(db.PgDB),
 	}
 
 	// Initialize cache service (Redis or in-memory based on USE_REDIS_CACHE env var)
@@ -83,17 +86,20 @@ func InitDependencies() (*Dependencies, error) {
 	// Initialize providers
 	liveAPIProvider := providers.NewLiveAPIProvider()
 
-	// Initialize user service with both sqlx and GORM repositories
-	userSvc := services.NewUserService(&repositories.User, repositories.UserGorm)
+	// Initialize pilot stats service first (needed by UserService)
+	pilotStatsSvc := services.NewPilotStatsService(db.DB, db.PgDB, legacyCache, repositories.DataProviderCfg, &repositories.User, confSvc)
 
-	// Initialize pilot stats service
-	pilotStatsSvc := services.NewPilotStatsService(db.DB, db.PgDB, legacyCache, repositories.DataProviderCfg, &repositories.User)
+	// Initialize user service with both sqlx and GORM repositories and pilot stats service
+	userSvc := services.NewUserService(&repositories.User, repositories.UserGorm, pilotStatsSvc)
 
 	// Initialize data provider config service
 	dataProviderConfigSvc := services.NewDataProviderConfigService(repositories.DataProviderCfg)
 
 	// Initialize V2 registration service with GORM and LiveAPIProvider
 	regServiceV2 := services.NewRegistrationServiceV2(db.PgDB, liveAPIProvider)
+
+	// Initialize aircraft livery service
+	aircraftLiverySvc := common.NewAircraftLiveryService(legacyCache, repositories.AircraftLivery)
 
 	svc := &Services{
 		User:               userSvc,
@@ -103,9 +109,10 @@ func InitDependencies() (*Dependencies, error) {
 		VaMgmt:             *services.NewVAManagementService(repositories.Va, repositories.User),
 		AirtableApi:        *common.NewAirtableApiService(confSvc),
 		AirtableSync:       *services.NewAtSyncService(legacyCache, &repositories.UserVASync),
-		Flights:            *services.NewFlightsService(legacyCache, liveSvc, confSvc),
+		Flights:            *services.NewFlightsService(legacyCache, liveSvc, confSvc, aircraftLiverySvc),
 		PilotStats:         pilotStatsSvc,
 		DataProviderConfig: dataProviderConfigSvc,
+		AircraftLivery:     aircraftLiverySvc,
 		Cache:              cacheSvc,
 		LegacyCache:        legacyCache,
 		Live:               *liveSvc,

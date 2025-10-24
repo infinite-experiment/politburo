@@ -9,6 +9,7 @@ import (
 	"infinite-experiment/politburo/internal/models/dtos"
 	"infinite-experiment/politburo/internal/workers"
 	"log"
+	"math"
 	"regexp"
 	"strings"
 	"time"
@@ -20,6 +21,7 @@ type FlightsService struct {
 	Cache      *common.CacheService
 	ApiService *common.LiveAPIService
 	Cfg        *common.VAConfigService
+	LiverySvc  *common.AircraftLiveryService
 }
 
 const maxRouteWorkers = 8
@@ -60,12 +62,17 @@ func SplitCallsign(raw string) (variable, prefix, suffix string) {
 	return variable, prefix, suffix
 }
 
-func NewFlightsService(cache *common.CacheService, liveApi *common.LiveAPIService, cfgSvc *common.VAConfigService) *FlightsService {
-
+func NewFlightsService(
+	cache *common.CacheService,
+	liveApi *common.LiveAPIService,
+	cfgSvc *common.VAConfigService,
+	liverySvc *common.AircraftLiveryService,
+) *FlightsService {
 	return &FlightsService{
 		Cache:      cache,
 		ApiService: liveApi,
 		Cfg:        cfgSvc,
+		LiverySvc:  liverySvc,
 	}
 }
 
@@ -159,15 +166,12 @@ func (svc *FlightsService) GetUserFlights(userId string, page int, sID string) (
 	var newSummaries []dtos.FlightSummary
 
 	for _, rec := range flts.Flights {
-
-		eqpmnt := common.GetAircraftLivery(rec.LiveryID, svc.Cache)
-
+		// Use new livery service (cache-first, then DB)
 		aircraftName := ""
 		liveryName := ""
-
-		if eqpmnt != nil {
-			aircraftName = eqpmnt.AircraftName
-			liveryName = eqpmnt.LiveryName
+		if liveryData := svc.LiverySvc.GetAircraftLivery(context.Background(), rec.LiveryID); liveryData != nil {
+			aircraftName = liveryData.AircraftName
+			liveryName = liveryData.LiveryName
 		}
 		totalMinutes := int(rec.TotalTime)
 		hours := totalMinutes / 60
@@ -305,14 +309,13 @@ func (svc *FlightsService) mapToLiveFlight(resp *dtos.FlightsResponse, sId strin
 		}
 
 		alt := (int(flt.Altitude) / 100) * 100
-		spd := int(flt.Speed)
+		spd := int(math.Round(flt.Speed))
 
-		eqpmnt := common.GetAircraftLivery(flt.LiveryID, svc.Cache)
+		// Use new livery service (cache-first, then DB)
 		acft, liv := "", ""
-
-		if eqpmnt != nil {
-			acft = eqpmnt.AircraftName
-			liv = eqpmnt.LiveryName
+		if liveryData := svc.LiverySvc.GetAircraftLivery(context.Background(), flt.LiveryID); liveryData != nil {
+			acft = liveryData.AircraftName
+			liv = liveryData.LiveryName
 		}
 		// Make DTO
 		out[i] = dtos.LiveFlight{
@@ -361,7 +364,7 @@ func FilterFlights(in []dtos.LiveFlight, pfx, sfx string) []dtos.LiveFlight {
 }
 func (svc *FlightsService) GetLiveFlights(sId string) (*[]dtos.LiveFlight, error) {
 	cacheKey := string(constants.CachePrefixLiveFlights) + sId
-	val, err := svc.Cache.GetOrSet(cacheKey, 2*time.Minute, func() (any, error) {
+	val, err := svc.Cache.GetOrSet(cacheKey, 1*time.Minute, func() (any, error) {
 		f, _, err := svc.ApiService.GetFlights(sId)
 
 		if err != nil {
@@ -478,8 +481,8 @@ func (svc *FlightsService) GetVALiveFlights(ctx context.Context, vaId string) (*
 
 	sId, ok := svc.Cfg.GetConfigVal(ctx, vaId, common.ConfigKeyIFServerID)
 
-	if !ok {
-		return nil, errors.New("no IF server configured for VA")
+	if !ok || sId == "" {
+		return nil, errors.New("Game server not configured")
 	}
 
 	pfx, _ := svc.Cfg.GetConfigVal(ctx, vaId, common.ConfigKeyCallsignPrefix)

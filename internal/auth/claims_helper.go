@@ -4,10 +4,12 @@ import (
 	"context"
 	"infinite-experiment/politburo/internal/constants"
 	"infinite-experiment/politburo/internal/db/repositories"
+	"log"
 	"os"
 )
 
-func MakeClaimsFromApi(ctx context.Context, userRepo *repositories.UserRepository, serverId string, userId string) *APIKeyClaims {
+// MakeClaimsFromApi creates API key claims using GORM repository
+func MakeClaimsFromApi(ctx context.Context, userRepo *repositories.UserRepositoryGORM, serverId string, userId string) *APIKeyClaims {
 
 	member, err := userRepo.FindUserMembership(ctx, serverId, userId)
 	if err != nil {
@@ -50,5 +52,6 @@ func MakeClaimsFromApi(ctx context.Context, userRepo *repositories.UserRepositor
 // Returns true if GOD_MODE env variable is set and matches the user ID
 func IsGodMode(discordUserID string) bool {
 	godModeKey := os.Getenv("GOD_MODE")
+	log.Printf("GOD_MODE  key: %s | input : %s", godModeKey, discordUserID)
 	return godModeKey != "" && discordUserID == godModeKey
 }

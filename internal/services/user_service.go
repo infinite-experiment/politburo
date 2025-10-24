@@ -11,14 +11,16 @@ import (
 )
 
 type UserService struct {
-	repo         *repositories.UserRepository
-	userRepoGorm *repositories.UserRepositoryGORM
+	repo            *repositories.UserRepository
+	userRepoGorm    *repositories.UserRepositoryGORM
+	pilotStatsService *PilotStatsService
 }
 
-func NewUserService(repo *repositories.UserRepository, repoGorm *repositories.UserRepositoryGORM) *UserService {
+func NewUserService(repo *repositories.UserRepository, repoGorm *repositories.UserRepositoryGORM, pilotStatsService *PilotStatsService) *UserService {
 	return &UserService{
-		repo:         repo,
-		userRepoGorm: repoGorm,
+		repo:            repo,
+		userRepoGorm:    repoGorm,
+		pilotStatsService: pilotStatsService,
 	}
 }
 
@@ -60,6 +62,18 @@ func (s *UserService) GetUserDetails(ctx context.Context, userDiscordID, vaDisco
 				Role:     string(vaRole.Role),
 				IsActive: vaRole.IsActive,
 				Callsign: vaRole.Callsign,
+			}
+
+			// Fetch Airtable data if user is a member and has a role
+			if currentVA.IsMember && currentVA.Role != "" && s.pilotStatsService != nil {
+				pilotStatus, err := s.pilotStatsService.GetPilotStatusByCallsign(ctx, userDiscordID, vaRole.VAID)
+				if err != nil {
+					// Log error but don't fail the request - Airtable data is optional
+					log.Printf("[GetUserDetails] Failed to fetch Airtable data for user %s: %v", userDiscordID, err)
+				} else {
+					// Add Airtable data to current VA status
+					currentVA.AirtableData = pilotStatus.RawFields
+				}
 			}
 		}
 	}

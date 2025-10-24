@@ -15,12 +15,13 @@ import (
 ///////////////////////////////////////////////////////////////////////////////
 
 const (
-	ConfigKeyIFServerID     = "if_server_id"
-	ConfigKeyTest           = "test"
-	ConfigKeyCallsignPrefix = "callsign_prefix"
-	ConfigKeyCallsignSuffix = "callsign_suffix"
-	ConfigKeyAirtableAPIKey = "airtable_api_key"
-	ConfigKeyAirtableVABase = "airtable_va_base"
+	ConfigKeyIFServerID                   = "if_server_id"
+	ConfigKeyTest                         = "test"
+	ConfigKeyCallsignPrefix               = "callsign_prefix"
+	ConfigKeyCallsignSuffix               = "callsign_suffix"
+	ConfigKeyAirtableAPIKey               = "airtable_api_key"
+	ConfigKeyAirtableVABase               = "airtable_va_base"
+	ConfigKeyAirtableCallsignColumnPrefix = "airtable_callsign_col_prefix"
 
 	// New table keys
 	ConfigKeyATTablePilots = "at_table_pilots"
@@ -40,23 +41,24 @@ const (
 )
 
 var AllowedVAConfigKeys = map[string]struct{}{
-	ConfigKeyIFServerID:              {},
-	ConfigKeyTest:                    {},
-	ConfigKeyCallsignPrefix:          {},
-	ConfigKeyCallsignSuffix:          {},
-	ConfigKeyAirtableAPIKey:          {},
-	ConfigKeyAirtableVABase:          {},
-	ConfigKeyATTablePilots:           {},
-	ConfigKeyATTableRoutes:           {},
-	ConfigKeyATTablePIREPs:           {},
-	ConfigKeyATFieldPilotsCallsign:   {},
-	ConfigKeyATFieldRoutesOrigin:     {},
-	ConfigKeyATFieldRoutesDest:       {},
-	ConfigKeyATFieldPIREPsCallsign:   {},
-	ConfigKeyATFieldPIREPsRoute:      {},
-	ConfigKeyATFieldPIREPsFlightTime: {},
-	ConfigKeyATFieldLastModified:     {},
-	ConfigKeyATFieldRoutesRoute:      {},
+	ConfigKeyIFServerID:                   {},
+	ConfigKeyTest:                         {},
+	ConfigKeyCallsignPrefix:               {},
+	ConfigKeyCallsignSuffix:               {},
+	ConfigKeyAirtableAPIKey:               {},
+	ConfigKeyAirtableVABase:               {},
+	ConfigKeyATTablePilots:                {},
+	ConfigKeyATTableRoutes:                {},
+	ConfigKeyATTablePIREPs:                {},
+	ConfigKeyATFieldPilotsCallsign:        {},
+	ConfigKeyATFieldRoutesOrigin:          {},
+	ConfigKeyATFieldRoutesDest:            {},
+	ConfigKeyATFieldPIREPsCallsign:        {},
+	ConfigKeyATFieldPIREPsRoute:           {},
+	ConfigKeyATFieldPIREPsFlightTime:      {},
+	ConfigKeyATFieldLastModified:          {},
+	ConfigKeyATFieldRoutesRoute:           {},
+	ConfigKeyAirtableCallsignColumnPrefix: {},
 }
 
 func ListAllowedVAConfigKeys() []string { return GetKeysStructMap(AllowedVAConfigKeys) }
