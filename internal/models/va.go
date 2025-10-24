@@ -14,5 +14,5 @@ type VA struct {
 
 // If your table is named differently (not "v_a" or "vas"), add TableName() method
 func (VA) TableName() string {
-	return "va" // exact table name in DB
+	return "virtual_airlines"
 }

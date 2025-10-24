@@ -2,6 +2,7 @@ package middleware
 
 import (
 	context "infinite-experiment/politburo/internal/auth"
+	"infinite-experiment/politburo/internal/common"
 	"net/http"
 )
 
@@ -13,7 +14,7 @@ func IsMemberMiddleware() func(http.Handler) http.Handler {
 			claims := context.GetUserClaims(r.Context())
 
 			if claims.Role() == "" {
-				http.Error(w, "Unauthorized. Not a registered VA member", http.StatusUnauthorized)
+				common.RespondPermissionDenied(w, "member (pilot)")
 				return
 			}
 			next.ServeHTTP(w, r)

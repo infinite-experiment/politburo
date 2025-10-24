@@ -4,6 +4,7 @@ import (
 	"context"
 	"infinite-experiment/politburo/internal/constants"
 	"infinite-experiment/politburo/internal/db/repositories"
+	"os"
 )
 
 func MakeClaimsFromApi(ctx context.Context, userRepo *repositories.UserRepository, serverId string, userId string) *APIKeyClaims {
@@ -43,4 +44,11 @@ func MakeClaimsFromApi(ctx context.Context, userRepo *repositories.UserRepositor
 		DiscordUIDVal:      userId,
 		DiscordServerIDVal: serverId,
 	}
+}
+
+// IsGodMode checks if the given Discord user ID has god-mode access
+// Returns true if GOD_MODE env variable is set and matches the user ID
+func IsGodMode(discordUserID string) bool {
+	godModeKey := os.Getenv("GOD_MODE")
+	return godModeKey != "" && discordUserID == godModeKey
 }

@@ -63,3 +63,6 @@ CREATE TABLE IF NOT EXISTS route_at_synced (
 ALTER TABLE route_at_synced
 ADD COLUMN IF NOT EXISTS route VARCHAR(20);
 
+
+ALTER TABLE va_user_roles
+ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT now();

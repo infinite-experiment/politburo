@@ -6,7 +6,7 @@ import (
 )
 
 type User struct {
-	ID            string    `gorm:"column:id;primaryKey;type:uuid"`
+	ID            string    `gorm:"column:id;primaryKey;type:uuid;default:gen_random_uuid()"`
 	DiscordID     string    `gorm:"column:discord_id;uniqueIndex"`
 	IFCommunityID string    `gorm:"column:if_community_id"`
 	IFApiID       *string   `gorm:"column:if_api_id;type:uuid"`
@@ -26,7 +26,7 @@ func (User) TableName() string {
 }
 
 type UserVARole struct {
-	ID              string           `gorm:"column:id;primaryKey;type:uuid"`
+	ID              string           `gorm:"column:id;primaryKey;type:uuid;default:gen_random_uuid()"`
 	UserID          string           `gorm:"column:user_id;type:uuid"`
 	VAID            string           `gorm:"column:va_id;type:uuid"`
 	Role            constants.VARole `gorm:"column:role;type:va_role"`

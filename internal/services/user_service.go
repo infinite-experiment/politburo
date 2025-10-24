@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"fmt"
+	"log"
 
 	"infinite-experiment/politburo/internal/db/repositories"
 	"infinite-experiment/politburo/internal/models/dtos/responses"
@@ -50,6 +51,9 @@ func (s *UserService) GetUserDetails(ctx context.Context, userDiscordID, vaDisco
 		affiliations = append(affiliations, affiliation)
 
 		// Check if this is the current VA (from context)
+		// Debug logging
+		log.Printf("[GetUserDetails] Comparing VA DiscordID '%s' with context serverID '%s'", vaRole.VA.DiscordID, vaDiscordServerID)
+
 		if vaRole.VA.DiscordID == vaDiscordServerID {
 			currentVA = &responses.CurrentVAStatus{
 				IsMember: true,

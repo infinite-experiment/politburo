@@ -47,6 +47,41 @@ func RespondError(w http.ResponseWriter, initTime time.Time, err error, message 
 	writeJSON(w, code, response)
 }
 
+// RespondErrorWithData sends a standardized JSON error response with data payload.
+// Useful for returning step-by-step error details or partial results.
+func RespondErrorWithData(w http.ResponseWriter, initTime time.Time, err error, message string, data any, statusCode ...int) {
+	code := http.StatusInternalServerError
+	if len(statusCode) > 0 {
+		code = statusCode[0]
+	}
+
+	msg := message
+	if err != nil && err.Error() != "" {
+		msg = err.Error()
+	}
+
+	response := dtos.APIResponse{
+		Status:       string(constants.APIStatusError),
+		Message:      msg,
+		ResponseTime: GetResponseTime(initTime),
+		Data:         data,
+	}
+
+	writeJSON(w, code, response)
+}
+
+// RespondPermissionDenied sends a standardized permission denied response.
+// Used by middleware to indicate insufficient role permissions.
+func RespondPermissionDenied(w http.ResponseWriter, requiredRole string) {
+	response := dtos.APIResponse{
+		Status:       string(constants.APIStatusError),
+		Message:      "Insufficient permissions for this operation. Required role: " + requiredRole,
+		ResponseTime: GetResponseTime(time.Now()),
+	}
+
+	writeJSON(w, http.StatusForbidden, response)
+}
+
 // writeJSON marshals data and writes it to the HTTP response.
 func writeJSON(w http.ResponseWriter, code int, body dtos.APIResponse) {
 	w.Header().Set("Content-Type", "application/json")

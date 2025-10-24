@@ -9,9 +9,7 @@ import (
 
 	"infinite-experiment/politburo/internal/db"
 	"infinite-experiment/politburo/internal/routes"
-
 	// Swagger docs
-	_ "infinite-experiment/politburo/docs"
 )
 
 // @title Infinite Experiment API
