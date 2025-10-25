@@ -1,0 +1,4 @@
+1. Remove Swagger Dependency
+2. Config Driven Approach to airtable connections
+3. Rewrite user registration handler
+4. Caching driver and redis setup locally via docker compose

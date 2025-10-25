@@ -2,6 +2,8 @@ package middleware
 
 import (
 	context "infinite-experiment/politburo/internal/auth"
+	"infinite-experiment/politburo/internal/common"
+	"log"
 	"net/http"
 )
 
@@ -12,8 +14,9 @@ func IsRegisteredMiddleware() func(http.Handler) http.Handler {
 
 			claims := context.GetUserClaims(r.Context())
 
-			if claims.UserID() == "" {
-				http.Error(w, "Unauthorized. Not a registered user", http.StatusUnauthorized)
+			log.Printf("User ID: %s, God ID: %s", claims.UserID(), claims.DiscordUserID())
+			if claims.UserID() == "" && !context.IsGodMode(claims.DiscordUserID()) {
+				common.RespondPermissionDenied(w, "registered user")
 				return
 			}
 			next.ServeHTTP(w, r)

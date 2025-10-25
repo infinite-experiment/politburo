@@ -1,19 +1,18 @@
 package routes
 
 import (
+	"context"
 	"net/http"
 	"time"
 
 	"infinite-experiment/politburo/internal/api"
-	"infinite-experiment/politburo/internal/common"
 	"infinite-experiment/politburo/internal/db"
-	"infinite-experiment/politburo/internal/db/repositories"
+	"infinite-experiment/politburo/internal/jobs"
 	"infinite-experiment/politburo/internal/middleware"
-	"infinite-experiment/politburo/internal/services"
 	"infinite-experiment/politburo/internal/workers"
 
 	"github.com/go-chi/chi/v5"
-	httpSwagger "github.com/swaggo/http-swagger"
+	"github.com/go-chi/cors"
 )
 
 func RegisterRoutes(upSince time.Time) http.Handler {
@@ -24,59 +23,80 @@ func RegisterRoutes(upSince time.Time) http.Handler {
 	// global middleware
 	//r.Use(middleware.Logging)
 
-	// r.Use(cors.Handler(cors.Options{
-	// 	AllowedOrigins:   []string{"https://*", "http://localhost:8081"}, // Allow all origins
-	// 	AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-	// 	AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
-	// 	ExposedHeaders:   []string{"Link"},
-	// 	AllowCredentials: false,
-	// 	MaxAge:           300, // Maximum value not ignored by any of major browsers
-	// }))
+	r.Use(cors.Handler(cors.Options{
+		AllowedOrigins:   []string{"https://*", "http://localhost:8081"}, // Allow all origins
+		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token", "X-API-Key", "X-Server-Id", "X-Discord-Id"},
+		ExposedHeaders:   []string{"Link"},
+		AllowCredentials: false,
+		MaxAge:           300, // Maximum value not ignored by any of major browsers
+	}))
 	// health check
 	r.Get("/healthCheck", api.HealthCheckHandler(db.DB, upSince))
 
-	// swagger UI
-	r.Handle("/swagger/*", httpSwagger.WrapHandler)
+	// Initialize dependencies using DI pattern
+	deps, err := api.InitDependencies()
+	if err != nil {
+		panic("Failed to initialize dependencies: " + err.Error())
+	}
 
-	// services
-	userRepo := repositories.NewUserRepository(db.DB)
-	keyRepo := repositories.NewApiKeysRepo(db.DB)
-	syncRepo := repositories.NewSyncRepository(db.DB)
+	// Initialize handlers with dependencies
+	handlers := api.NewHandlers(deps)
 
-	cacheSvc := common.NewCacheService(60000, 600)
-	liveSvc := common.NewLiveAPIService()
-	vaRepo := repositories.NewVARepository(db.DB)
-	regSvc := services.NewRegistrationService(liveSvc, *cacheSvc, *userRepo, *vaRepo)
-	cfgSvc := common.NewVAConfigService(vaRepo, cacheSvc)
-	vaMgmtSvc := services.NewVAManagementService(*vaRepo, *userRepo)
-	atApiSvc := common.NewAirtableApiService(cfgSvc)
-	syncSvc := services.NewAtSyncService(cacheSvc, syncRepo)
-	flightSvc := services.NewFlightsService(cacheSvc, liveSvc, cfgSvc)
+	// Legacy: Keep individual references for old handlers that haven't been migrated yet
+	userRepoGorm := deps.Repo.UserGorm
+	keyRepo := &deps.Repo.Keys
+	legacyCacheSvc := deps.Services.LegacyCache
+	liveSvc := &deps.Services.Live
+	cfgSvc := &deps.Services.Conf
+	vaMgmtSvc := &deps.Services.VaMgmt
+	atApiSvc := &deps.Services.AirtableApi
+	syncSvc := &deps.Services.AirtableSync
+	flightSvc := &deps.Services.Flights
 
-	r.Get("/public/flight", api.UserFlightMapHandler(cacheSvc))
+	r.Get("/public/flight", api.UserFlightMapHandler(legacyCacheSvc))
+	r.Get("/public/flight/user", api.UserFlightsCacheHandler(legacyCacheSvc))
 
-	//Setup
-	go workers.LogbookWorker(cacheSvc, liveSvc)
-	go workers.StartCacheFiller(cacheSvc, liveSvc)
+	// Setup workers
+	go workers.LogbookWorker(legacyCacheSvc, liveSvc, deps.Services.AircraftLivery)
+	go workers.StartCacheFiller(legacyCacheSvc, liveSvc, deps.Repo.AircraftLivery, deps.Services.AircraftLivery)
+
+	// Setup scheduled jobs
+	pilotSyncJob := jobs.InitializeJobs(
+		context.Background(),
+		db.PgDB,
+		legacyCacheSvc,
+		deps.Repo.DataProviderCfg,
+		deps.Repo.VASyncHistory,
+		deps.Repo.PilotATSynced,
+		cfgSvc,
+	)
+
+	// Initialize jobs handler for manual triggering
+	jobsHandler := api.NewJobsHandler(pilotSyncJob)
 	// API v1 routes
 	r.Route("/api/v1", func(v1 chi.Router) {
-		v1.Use(middleware.AuthMiddleware(userRepo, keyRepo)) // global: all routes must be authenticated
+		v1.Use(middleware.AuthMiddleware(userRepoGorm, keyRepo))  // global: all routes must be authenticated (using GORM)
+		v1.Get("/user/details", handlers.GetUserDetails())        // MIGRATED to DI
+		v1.Get("/admin/verify-god", handlers.VerifyGodMode())     // God mode verification
 
 		// Registered users group
 		v1.Group(func(registered chi.Router) {
 			// God-only group (admin + staff + member + registered)
 			registered.Group(func(god chi.Router) {
 				god.Use(middleware.IsGodMiddleware())
-				god.Post("/va/setRole", api.SyncUser(vaMgmtSvc))
-				god.Delete("/users/delete", api.DeleteAllUsers(userRepo))
+				god.Delete("/users/delete", handlers.DeleteAllUsers()) // MIGRATED to DI
 			})
 			registered.Use(middleware.IsRegisteredMiddleware())
 
-			registered.Post("/server/init", api.InitRegisterServer(regSvc))
+			registered.Post("/server/init", handlers.InitServerRegistrationV2()) // V2: Uses GORM
 
 			// Member-only group (requires registered first)
 			registered.Group(func(member chi.Router) {
 				member.Use(middleware.IsMemberMiddleware())
+
+				// Pilot stats endpoint - comprehensive stats including game stats (future) and provider data
+				member.Get("/pilot/stats", handlers.GetPilotStats())
 
 				member.Get("/va/live", api.VaFlightsHandler(flightSvc))
 				member.Get("/live/sessions", api.LiveServers(flightSvc))
@@ -97,13 +117,21 @@ func RegisterRoutes(upSince time.Time) http.Handler {
 						admin.Get("/va/configs/keys", api.ListConfigKeys(cfgSvc))
 						admin.Get("/debug", api.DebugHandler(*atApiSvc, *syncSvc))
 
+						// Data provider configuration management
+						admin.Post("/admin/data-provider/config", api.SaveDataProviderConfigHandler(deps))
+
+						// Background jobs management
+						admin.Post("/admin/jobs/sync-pilots", jobsHandler.TriggerPilotSync())
+						admin.Get("/admin/jobs/status", jobsHandler.GetJobStatus())
+
 					})
 				})
 			})
 		})
 
 		// Public
-		v1.Post("/user/register/init", api.InitUserRegistrationHandler(regSvc))
+		v1.Post("/user/register/init", handlers.InitUserRegistrationV2()) // V2: Uses GORM + LiveAPIProvider
+		v1.Post("/user/register/link", handlers.LinkUserToVA())           // Link existing user to VA
 	})
 
 	return r

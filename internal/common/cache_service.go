@@ -6,9 +6,14 @@ import (
 	"github.com/patrickmn/go-cache"
 )
 
+// CacheService is the legacy in-memory cache implementation
+// Deprecated: Use RedisCacheService for production
 type CacheService struct {
 	cache *cache.Cache
 }
+
+// Ensure CacheService implements CacheInterface
+var _ CacheInterface = (*CacheService)(nil)
 
 func NewCacheService(defaultExpirationSeconds, cleanUpIntervalSeconds int) *CacheService {
 
@@ -45,4 +50,9 @@ func (cs *CacheService) GetOrSet(
 
 	cs.Set(key, val, duration)
 	return val, nil
+}
+
+// Close closes the cache (no-op for in-memory cache)
+func (cs *CacheService) Close() error {
+	return nil
 }

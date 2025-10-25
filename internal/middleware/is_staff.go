@@ -1,10 +1,10 @@
 package middleware
 
 import (
-	context "infinite-experiment/politburo/internal/auth"
+	"infinite-experiment/politburo/internal/auth"
+	"infinite-experiment/politburo/internal/common"
 	"infinite-experiment/politburo/internal/constants"
 	"net/http"
-	"os"
 )
 
 func IsStaffMiddleware() func(http.Handler) http.Handler {
@@ -12,14 +12,13 @@ func IsStaffMiddleware() func(http.Handler) http.Handler {
 
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
-			claims := context.GetUserClaims(r.Context())
-			god_key := os.Getenv("GOD_MODE")
+			claims := auth.GetUserClaims(r.Context())
 
-			if claims.Role() == constants.RoleAirlineManager.String() || claims.Role() == constants.RoleAdmin.String() || (god_key != "" && claims.DiscordUserID() == god_key) {
+			if claims.Role() == constants.RoleAirlineManager.String() || claims.Role() == constants.RoleAdmin.String() || auth.IsGodMode(claims.DiscordUserID()) {
 				next.ServeHTTP(w, r)
 				return
 			}
-			http.Error(w, "Unauthorized. Need staff perms", http.StatusUnauthorized)
+			common.RespondPermissionDenied(w, "staff (airline manager or admin)")
 		})
 	}
 }

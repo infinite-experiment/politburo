@@ -2,11 +2,11 @@ package common
 
 import (
 	stdCtx "context"
-	"errors"
 	"fmt"
 	"infinite-experiment/politburo/internal/auth"
 	"infinite-experiment/politburo/internal/constants"
 	"infinite-experiment/politburo/internal/db/repositories"
+	"log"
 	"time"
 )
 
@@ -15,12 +15,13 @@ import (
 ///////////////////////////////////////////////////////////////////////////////
 
 const (
-	ConfigKeyIFServerID     = "if_server_id"
-	ConfigKeyTest           = "test"
-	ConfigKeyCallsignPrefix = "callsign_prefix"
-	ConfigKeyCallsignSuffix = "callsign_suffix"
-	ConfigKeyAirtableAPIKey = "airtable_api_key"
-	ConfigKeyAirtableVABase = "airtable_va_base"
+	ConfigKeyIFServerID                   = "if_server_id"
+	ConfigKeyTest                         = "test"
+	ConfigKeyCallsignPrefix               = "callsign_prefix"
+	ConfigKeyCallsignSuffix               = "callsign_suffix"
+	ConfigKeyAirtableAPIKey               = "airtable_api_key"
+	ConfigKeyAirtableVABase               = "airtable_va_base"
+	ConfigKeyAirtableCallsignColumnPrefix = "airtable_callsign_col_prefix"
 
 	// New table keys
 	ConfigKeyATTablePilots = "at_table_pilots"
@@ -40,23 +41,24 @@ const (
 )
 
 var AllowedVAConfigKeys = map[string]struct{}{
-	ConfigKeyIFServerID:              {},
-	ConfigKeyTest:                    {},
-	ConfigKeyCallsignPrefix:          {},
-	ConfigKeyCallsignSuffix:          {},
-	ConfigKeyAirtableAPIKey:          {},
-	ConfigKeyAirtableVABase:          {},
-	ConfigKeyATTablePilots:           {},
-	ConfigKeyATTableRoutes:           {},
-	ConfigKeyATTablePIREPs:           {},
-	ConfigKeyATFieldPilotsCallsign:   {},
-	ConfigKeyATFieldRoutesOrigin:     {},
-	ConfigKeyATFieldRoutesDest:       {},
-	ConfigKeyATFieldPIREPsCallsign:   {},
-	ConfigKeyATFieldPIREPsRoute:      {},
-	ConfigKeyATFieldPIREPsFlightTime: {},
-	ConfigKeyATFieldLastModified:     {},
-	ConfigKeyATFieldRoutesRoute:      {},
+	ConfigKeyIFServerID:                   {},
+	ConfigKeyTest:                         {},
+	ConfigKeyCallsignPrefix:               {},
+	ConfigKeyCallsignSuffix:               {},
+	ConfigKeyAirtableAPIKey:               {},
+	ConfigKeyAirtableVABase:               {},
+	ConfigKeyATTablePilots:                {},
+	ConfigKeyATTableRoutes:                {},
+	ConfigKeyATTablePIREPs:                {},
+	ConfigKeyATFieldPilotsCallsign:        {},
+	ConfigKeyATFieldRoutesOrigin:          {},
+	ConfigKeyATFieldRoutesDest:            {},
+	ConfigKeyATFieldPIREPsCallsign:        {},
+	ConfigKeyATFieldPIREPsRoute:           {},
+	ConfigKeyATFieldPIREPsFlightTime:      {},
+	ConfigKeyATFieldLastModified:          {},
+	ConfigKeyATFieldRoutesRoute:           {},
+	ConfigKeyAirtableCallsignColumnPrefix: {},
 }
 
 func ListAllowedVAConfigKeys() []string { return GetKeysStructMap(AllowedVAConfigKeys) }
@@ -72,10 +74,10 @@ func IsValidVAConfigKey(k string) bool {
 
 type VAConfigService struct {
 	repo  *repositories.VARepository
-	cache *CacheService
+	cache CacheInterface
 }
 
-func NewVAConfigService(r *repositories.VARepository, c *CacheService) *VAConfigService {
+func NewVAConfigService(r *repositories.VARepository, c CacheInterface) *VAConfigService {
 	return &VAConfigService{repo: r, cache: c}
 }
 
@@ -147,11 +149,24 @@ func (s *VAConfigService) GetAllConfigValues(
 		return nil, err
 	}
 
-	cfgs, ok := val.(map[string]string)
-	if !ok {
-		return nil, errors.New("cache type assertion to map[string]string failed")
+	// Handle both map[string]string (from loader) and map[string]any (from JSON unmarshal)
+	switch v := val.(type) {
+	case map[string]string:
+		return v, nil
+	case map[string]any:
+		// Convert map[string]any to map[string]string
+		cfgs := make(map[string]string, len(v))
+		for key, value := range v {
+			if strVal, ok := value.(string); ok {
+				cfgs[key] = strVal
+			} else {
+				return nil, fmt.Errorf("value for key %q is not a string", key)
+			}
+		}
+		return cfgs, nil
+	default:
+		return nil, fmt.Errorf("cache type assertion failed: expected map[string]string or map[string]any, got %T", val)
 	}
-	return cfgs, nil
 }
 
 // ---------------------------------------------------------------------------
@@ -164,13 +179,17 @@ func (s *VAConfigService) GetConfigVal(
 ) (string, bool) {
 
 	if !IsValidVAConfigKey(key) {
+		log.Printf("\nUnable to fetch VA Config: %s", key)
 		return "", false
 	}
 
 	cfgs, err := s.GetAllConfigValues(ctx, vaID)
 	if err != nil {
+		log.Printf("\nError: %v", err)
+
 		return "", false
 	}
+	log.Printf("\nConfigs: %v", cfgs)
 	return cfgs[key], true
 }
 

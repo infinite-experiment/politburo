@@ -9,6 +9,7 @@ import (
 	"infinite-experiment/politburo/internal/models/dtos"
 	"infinite-experiment/politburo/internal/workers"
 	"log"
+	"math"
 	"regexp"
 	"strings"
 	"time"
@@ -20,6 +21,7 @@ type FlightsService struct {
 	Cache      *common.CacheService
 	ApiService *common.LiveAPIService
 	Cfg        *common.VAConfigService
+	LiverySvc  *common.AircraftLiveryService
 }
 
 const maxRouteWorkers = 8
@@ -60,12 +62,17 @@ func SplitCallsign(raw string) (variable, prefix, suffix string) {
 	return variable, prefix, suffix
 }
 
-func NewFlightsService(cache *common.CacheService, liveApi *common.LiveAPIService, cfgSvc *common.VAConfigService) *FlightsService {
-
+func NewFlightsService(
+	cache *common.CacheService,
+	liveApi *common.LiveAPIService,
+	cfgSvc *common.VAConfigService,
+	liverySvc *common.AircraftLiveryService,
+) *FlightsService {
 	return &FlightsService{
 		Cache:      cache,
 		ApiService: liveApi,
 		Cfg:        cfgSvc,
+		LiverySvc:  liverySvc,
 	}
 }
 
@@ -138,6 +145,8 @@ func (svc *FlightsService) GetUserFlights(userId string, page int, sID string) (
 		}
 	}
 
+	log.Printf("User ID:%s", uId)
+
 	if !userFound {
 		response.Error = "Unable to fetch user"
 		return response, err
@@ -154,21 +163,28 @@ func (svc *FlightsService) GetUserFlights(userId string, page int, sID string) (
 		return response, fmt.Errorf("empty result")
 	}
 
+	var newSummaries []dtos.FlightSummary
+
 	for _, rec := range flts.Flights {
-
-		eqpmnt := common.GetAircraftLivery(rec.LiveryID, svc.Cache)
-
+		// Use new livery service (cache-first, then DB)
 		aircraftName := ""
 		liveryName := ""
-
-		if eqpmnt != nil {
-			aircraftName = eqpmnt.AircraftName
-			liveryName = eqpmnt.LiveryName
+		if liveryData := svc.LiverySvc.GetAircraftLivery(context.Background(), rec.LiveryID); liveryData != nil {
+			aircraftName = liveryData.AircraftName
+			liveryName = liveryData.LiveryName
 		}
 		totalMinutes := int(rec.TotalTime)
 		hours := totalMinutes / 60
 		minutes := totalMinutes % 60
 		dur := fmt.Sprintf("%02d:%02d", hours, minutes)
+
+		newSummaries = append(newSummaries, dtos.FlightSummary{
+			FlightID:    rec.ID,
+			Origin:      rec.OriginAirport,
+			Destination: rec.DestinationAirport,
+			Aircraft:    aircraftName,
+			Livery:      liveryName,
+		})
 
 		dto := dtos.HistoryRecord{
 			Origin:     rec.OriginAirport,
@@ -183,12 +199,20 @@ func (svc *FlightsService) GetUserFlights(userId string, page int, sID string) (
 			Duration:   dur,
 			Aircraft:   aircraftName,
 		}
+		cacheKey := string(constants.CachePrefixFlightHistory) + rec.ID
+
+		log.Printf("Checking queue eligibility:\n origin: %s, dest: %s, time: %f, time since: %v, time: %v",
+			rec.DestinationAirport, rec.OriginAirport, rec.TotalTime, time.Since(rec.Created), rec.Created)
 		if rec.OriginAirport != "" && rec.DestinationAirport != "" && rec.TotalTime > 0 && time.Since(rec.Created) <= 72*time.Hour {
+			log.Printf("[DEBUG] Attempting to send to LogbookQueue: flightID=%s, queue_addr=%p", rec.ID, workers.LogbookQueue)
 			select {
-			case workers.LogbookQueue <- workers.LogbookRequest{FlightId: rec.ID, Flight: rec, SessionId: sID}:
-				dto.MapUrl = fmt.Sprintf("https://%s%s", "comradebot.cc?i=", rec.ID)
+			case workers.LogbookQueue <- workers.LogbookRequest{FlightId: rec.ID, Flight: rec, SessionId: sID, CacheKey: cacheKey}:
+				log.Printf("[DEBUG] Sent to LogbookQueue successfully: flightID=%s", rec.ID)
+				dto.MapUrl = fmt.Sprintf("http://%s%s", "localhost:8081?i=", rec.ID)
 				//dto.MapUrl = ""
 			default:
+				log.Printf("[DEBUG] Skipping send to LogbookQueue: flightID=%s, Origin=%s, Dest=%s, TotalTime=%f, AgeHours=%.2f",
+					rec.ID, rec.OriginAirport, rec.DestinationAirport, rec.TotalTime, time.Since(rec.Created).Hours())
 				dto.MapUrl = ""
 
 			}
@@ -196,9 +220,70 @@ func (svc *FlightsService) GetUserFlights(userId string, page int, sID string) (
 			dto.MapUrl = ""
 		}
 		response.Records = append(response.Records, dto)
+
+	}
+	svc.UpdateUserFlightsCache(uId, newSummaries)
+	return response, nil
+}
+
+func (svc *FlightsService) UpdateUserFlightsCache(uId string, newSummaries []dtos.FlightSummary) {
+	sumCacheKey := fmt.Sprintf("%s%s", constants.CachePrefixUserFlights, uId)
+
+	cachedVal, found := svc.Cache.Get(sumCacheKey)
+	var cachedSummaries []dtos.FlightSummary
+
+	if found {
+		var ok bool
+		cachedSummaries, ok = cachedVal.([]dtos.FlightSummary)
+		if !ok {
+			log.Printf("Cache type assertion failed for key %s, evicting", sumCacheKey)
+			svc.Cache.Delete(sumCacheKey)
+			cachedSummaries = nil
+			found = false
+		}
 	}
 
-	return response, nil
+	// Validate first and last cached flight IDs are present in detailed flight cache
+	isCacheValid := true
+	if found && len(cachedSummaries) > 0 {
+		firstID := cachedSummaries[0].FlightID
+		lastID := cachedSummaries[len(cachedSummaries)-1].FlightID
+
+		if _, ok := svc.Cache.Get(string(constants.CachePrefixFlightHistory) + firstID); !ok {
+			isCacheValid = false
+		}
+		if _, ok := svc.Cache.Get(string(constants.CachePrefixFlightHistory) + lastID); !ok {
+			isCacheValid = false
+		}
+	} else {
+		isCacheValid = false
+	}
+
+	if !isCacheValid {
+		log.Printf("Cache invalid or missing boundary flights, replacing cache: %s", sumCacheKey)
+		svc.Cache.Set(sumCacheKey, newSummaries, fltTTL)
+		return
+	}
+
+	// Append new summaries avoiding duplicates
+	existingIDs := make(map[string]struct{}, len(cachedSummaries))
+	for _, fs := range cachedSummaries {
+		existingIDs[fs.FlightID] = struct{}{}
+	}
+	appended := false
+	for _, fs := range newSummaries {
+		if _, exists := existingIDs[fs.FlightID]; !exists {
+			cachedSummaries = append(cachedSummaries, fs)
+			appended = true
+		}
+	}
+
+	if appended {
+		log.Printf("Appending new summaries to cache: %s", sumCacheKey)
+		svc.Cache.Set(sumCacheKey, cachedSummaries, fltTTL)
+	} else {
+		log.Printf("No new summaries to append to cache: %s", sumCacheKey)
+	}
 }
 
 func (svc *FlightsService) mapToLiveFlight(resp *dtos.FlightsResponse, sId string) *[]dtos.LiveFlight {
@@ -224,14 +309,13 @@ func (svc *FlightsService) mapToLiveFlight(resp *dtos.FlightsResponse, sId strin
 		}
 
 		alt := (int(flt.Altitude) / 100) * 100
-		spd := int(flt.Speed)
+		spd := int(math.Round(flt.Speed))
 
-		eqpmnt := common.GetAircraftLivery(flt.LiveryID, svc.Cache)
+		// Use new livery service (cache-first, then DB)
 		acft, liv := "", ""
-
-		if eqpmnt != nil {
-			acft = eqpmnt.AircraftName
-			liv = eqpmnt.LiveryName
+		if liveryData := svc.LiverySvc.GetAircraftLivery(context.Background(), flt.LiveryID); liveryData != nil {
+			acft = liveryData.AircraftName
+			liv = liveryData.LiveryName
 		}
 		// Make DTO
 		out[i] = dtos.LiveFlight{
@@ -280,7 +364,7 @@ func FilterFlights(in []dtos.LiveFlight, pfx, sfx string) []dtos.LiveFlight {
 }
 func (svc *FlightsService) GetLiveFlights(sId string) (*[]dtos.LiveFlight, error) {
 	cacheKey := string(constants.CachePrefixLiveFlights) + sId
-	val, err := svc.Cache.GetOrSet(cacheKey, 2*time.Minute, func() (any, error) {
+	val, err := svc.Cache.GetOrSet(cacheKey, 1*time.Minute, func() (any, error) {
 		f, _, err := svc.ApiService.GetFlights(sId)
 
 		if err != nil {
@@ -397,8 +481,8 @@ func (svc *FlightsService) GetVALiveFlights(ctx context.Context, vaId string) (*
 
 	sId, ok := svc.Cfg.GetConfigVal(ctx, vaId, common.ConfigKeyIFServerID)
 
-	if !ok {
-		return nil, errors.New("no IF server configured for VA")
+	if !ok || sId == "" {
+		return nil, errors.New("Game server not configured")
 	}
 
 	pfx, _ := svc.Cfg.GetConfigVal(ctx, vaId, common.ConfigKeyCallsignPrefix)

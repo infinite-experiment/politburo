@@ -2,6 +2,7 @@ package middleware
 
 import (
 	context "infinite-experiment/politburo/internal/auth"
+	"infinite-experiment/politburo/internal/common"
 	"net/http"
 )
 
@@ -12,10 +13,13 @@ func IsMemberMiddleware() func(http.Handler) http.Handler {
 
 			claims := context.GetUserClaims(r.Context())
 
-			if claims.Role() == "" {
-				http.Error(w, "Unauthorized. Not a registered VA member", http.StatusUnauthorized)
+			// Check permissions BEFORE calling next handler
+			if claims.Role() == "" && !context.IsGodMode(claims.DiscordUserID()) {
+				common.RespondPermissionDenied(w, "member (pilot)")
 				return
 			}
+
+			// Only call next handler ONCE
 			next.ServeHTTP(w, r)
 		})
 	}

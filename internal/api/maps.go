@@ -61,3 +61,45 @@ func UserFlightMapHandler(c *common.CacheService) http.HandlerFunc {
 
 	}
 }
+
+func UserFlightsCacheHandler(c *common.CacheService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		initTime := time.Now()
+		flightID := r.URL.Query().Get("u")
+
+		log.Printf("API CALLED: %s", flightID)
+		if flightID == "" {
+			resp := &dtos.APIResponse{
+				Status:       string(constants.APIStatusError),
+				Message:      "Missing required flight ID",
+				ResponseTime: common.GetResponseTime(initTime),
+			}
+			w.WriteHeader(http.StatusBadRequest)
+			_ = json.NewEncoder(w).Encode(resp)
+			return
+		}
+
+		result := common.GetUserFlightsFromCache(c, flightID)
+
+		if result == nil {
+			resp := &dtos.APIResponse{
+				Status:       string(constants.APIStatusError),
+				Message:      "Flight details not found or unavailable. Please try to regenerate the link via /logbook command",
+				ResponseTime: common.GetResponseTime(initTime),
+			}
+			w.WriteHeader(http.StatusNotFound)
+			json.NewEncoder(w).Encode(resp)
+			return
+		}
+
+		resp := &dtos.APIResponse{
+			Status:       string(constants.APIStatusOk),
+			Message:      "Data found",
+			ResponseTime: common.GetResponseTime(initTime),
+			Data:         result,
+		}
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(resp)
+
+	}
+}

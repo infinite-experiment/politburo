@@ -51,3 +51,11 @@ type Location struct {
 	Longitude float64 `json:"longitude"`
 	Altitude  float64 `json:"altitude"`
 }
+
+type FlightSummary struct {
+	FlightID    string
+	Origin      string
+	Destination string
+	Aircraft    string
+	Livery      string
+}
