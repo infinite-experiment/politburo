@@ -47,7 +47,6 @@ func RegisterRoutes(upSince time.Time) http.Handler {
 	userRepoGorm := deps.Repo.UserGorm
 	keyRepo := &deps.Repo.Keys
 	legacyCacheSvc := deps.Services.LegacyCache
-	liveSvc := &deps.Services.Live
 	cfgSvc := &deps.Services.Conf
 	vaMgmtSvc := &deps.Services.VaMgmt
 	atApiSvc := &deps.Services.AirtableApi
@@ -58,27 +57,40 @@ func RegisterRoutes(upSince time.Time) http.Handler {
 	r.Get("/public/flight/user", api.UserFlightsCacheHandler(legacyCacheSvc))
 
 	// Setup workers
-	go workers.LogbookWorker(legacyCacheSvc, liveSvc, deps.Services.AircraftLivery)
-	go workers.StartCacheFiller(legacyCacheSvc, liveSvc, deps.Repo.AircraftLivery, deps.Services.AircraftLivery)
 
-	// Setup scheduled jobs
-	pilotSyncJob := jobs.InitializeJobs(
+	// Setup scheduled jobs (both pilot and route sync run every hour)
+	jobsContainer := jobs.InitializeJobs(
 		context.Background(),
 		db.PgDB,
-		legacyCacheSvc,
+		deps.Services.Cache, // Use CacheInterface (supports Redis or in-memory)
 		deps.Repo.DataProviderCfg,
 		deps.Repo.VASyncHistory,
 		deps.Repo.PilotATSynced,
+		deps.Repo.RouteATSynced,
+		deps.Repo.PirepATSynced,
 		cfgSvc,
+		&deps.Services.RedisQueue,
+	)
+
+	workers.InitWorkers(
+		db.PgDB,
+		&deps.Services.Cache,
+		&deps.Services.Live,
+		deps.Services.AircraftLivery,
+		&deps.Services.RedisQueue,
+		deps.Repo.AircraftLivery,
+		deps.Repo.DataProviderCfg,
+		deps.Repo.PirepATSynced,
+		deps.Repo.VASyncHistory,
 	)
 
 	// Initialize jobs handler for manual triggering
-	jobsHandler := api.NewJobsHandler(pilotSyncJob)
+	jobsHandler := api.NewJobsHandler(jobsContainer.PilotSync)
 	// API v1 routes
 	r.Route("/api/v1", func(v1 chi.Router) {
-		v1.Use(middleware.AuthMiddleware(userRepoGorm, keyRepo))  // global: all routes must be authenticated (using GORM)
-		v1.Get("/user/details", handlers.GetUserDetails())        // MIGRATED to DI
-		v1.Get("/admin/verify-god", handlers.VerifyGodMode())     // God mode verification
+		v1.Use(middleware.AuthMiddleware(userRepoGorm, keyRepo)) // global: all routes must be authenticated (using GORM)
+		v1.Get("/user/details", handlers.GetUserDetails())       // MIGRATED to DI
+		v1.Get("/admin/verify-god", handlers.VerifyGodMode())    // God mode verification
 
 		// Registered users group
 		v1.Group(func(registered chi.Router) {

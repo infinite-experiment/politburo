@@ -16,11 +16,11 @@ import (
 // AirtableProvider implements DataProvider for Airtable
 type AirtableProvider struct {
 	client *http.Client
-	cache  *common.CacheService
+	cache  common.CacheInterface
 }
 
 // NewAirtableProvider creates a new Airtable provider
-func NewAirtableProvider(cache *common.CacheService) *AirtableProvider {
+func NewAirtableProvider(cache common.CacheInterface) *AirtableProvider {
 	return &AirtableProvider{
 		client: &http.Client{
 			Timeout: 30 * time.Second,
@@ -147,8 +147,9 @@ func (p *AirtableProvider) FetchRecords(ctx context.Context, schema *dtos.Entity
 	records := make([]RecordWithID, len(airtableResp.Records))
 	for i, rec := range airtableResp.Records {
 		records[i] = RecordWithID{
-			ID:     rec.ID,
-			Fields: rec.Fields,
+			ID:          rec.ID,
+			Fields:      rec.Fields,
+			CreatedTime: rec.CreatedTime,
 		}
 	}
 
@@ -315,8 +316,9 @@ func (p *AirtableProvider) buildFetchPayload(schema *dtos.EntitySchema, filters 
 // Airtable API response structures
 
 type AirtableRecordResponse struct {
-	ID     string                 `json:"id"`
-	Fields map[string]interface{} `json:"fields"`
+	ID          string                 `json:"id"`
+	Fields      map[string]interface{} `json:"fields"`
+	CreatedTime string                 `json:"createdTime,omitempty"`
 }
 
 type AirtableListResponse struct {

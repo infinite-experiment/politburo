@@ -11,15 +11,17 @@ import (
 )
 
 type Repositories struct {
-	User             repositories.UserRepository
-	UserGorm         *repositories.UserRepositoryGORM
-	Keys             repositories.KeysRepo
-	UserVASync       repositories.SyncRepository
-	Va               repositories.VARepository
-	DataProviderCfg  *repositories.DataProviderConfigRepo
-	VASyncHistory    *repositories.VASyncHistoryRepo
-	PilotATSynced    *repositories.PilotATSyncedRepo
-	AircraftLivery   *repositories.AircraftLiveryRepository
+	User            repositories.UserRepository
+	UserGorm        *repositories.UserRepositoryGORM
+	Keys            repositories.KeysRepo
+	UserVASync      repositories.SyncRepository
+	Va              repositories.VARepository
+	DataProviderCfg *repositories.DataProviderConfigRepo
+	VASyncHistory   *repositories.VASyncHistoryRepo
+	PilotATSynced   *repositories.PilotATSyncedRepo
+	RouteATSynced   *repositories.RouteATSyncedRepo
+	PirepATSynced   *repositories.PirepATSyncedRepo
+	AircraftLivery  *repositories.AircraftLiveryRepository
 }
 
 type Services struct {
@@ -37,6 +39,7 @@ type Services struct {
 	PilotStats         *services.PilotStatsService
 	DataProviderConfig *services.DataProviderConfigService
 	AircraftLivery     *common.AircraftLiveryService
+	RedisQueue         common.RedisQueueService
 }
 type Dependencies struct {
 	Repo     *Repositories
@@ -54,6 +57,8 @@ func InitDependencies() (*Dependencies, error) {
 		DataProviderCfg: repositories.NewDataProviderConfigRepo(db.PgDB),
 		VASyncHistory:   repositories.NewVASyncHistoryRepo(db.PgDB),
 		PilotATSynced:   repositories.NewPilotATSyncedRepo(db.PgDB),
+		RouteATSynced:   repositories.NewRouteATSyncedRepo(db.PgDB),
+		PirepATSynced:   repositories.NewPirepATSyncedRepo(db.PgDB),
 		AircraftLivery:  repositories.NewAircraftLiveryRepository(db.PgDB),
 	}
 
@@ -61,14 +66,17 @@ func InitDependencies() (*Dependencies, error) {
 	var cacheSvc common.CacheInterface
 	useRedis := os.Getenv("USE_REDIS_CACHE") == "true"
 
+	var redisQSvc common.RedisQueueService
 	if useRedis {
-		redisCache, err := common.NewRedisCacheService()
+		redisClient := common.NewRedisClient()
+		redisCache, err := common.NewRedisCacheService(redisClient)
 		if err != nil {
 			log.Printf("Failed to initialize Redis cache, falling back to in-memory: %v", err)
 			cacheSvc = common.NewCacheService(60000, 600)
 		} else {
 			log.Println("Using Redis cache")
 			cacheSvc = redisCache
+			redisQSvc = *common.NewRedisQueueService(redisClient)
 		}
 	} else {
 		log.Println("Using in-memory cache")
@@ -91,7 +99,7 @@ func InitDependencies() (*Dependencies, error) {
 	liveAPIProvider := providers.NewLiveAPIProvider()
 
 	// Initialize pilot stats service first (needed by UserService)
-	pilotStatsSvc := services.NewPilotStatsService(db.DB, db.PgDB, legacyCache, repositories.DataProviderCfg, &repositories.User, confSvc)
+	pilotStatsSvc := services.NewPilotStatsService(db.DB, db.PgDB, legacyCache, repositories.DataProviderCfg, &repositories.User, confSvc, repositories.PirepATSynced, repositories.RouteATSynced)
 
 	// Initialize user service with both sqlx and GORM repositories and pilot stats service
 	userSvc := services.NewUserService(&repositories.User, repositories.UserGorm, pilotStatsSvc)
@@ -120,6 +128,7 @@ func InitDependencies() (*Dependencies, error) {
 		Cache:              cacheSvc,
 		LegacyCache:        legacyCache,
 		Live:               *liveSvc,
+		RedisQueue:         redisQSvc,
 	}
 
 	return &Dependencies{

@@ -19,7 +19,7 @@ import (
 // PilotSyncJob handles syncing pilot data from Airtable to local database
 type PilotSyncJob struct {
 	db                *gorm.DB
-	cache             *common.CacheService
+	cache             common.CacheInterface
 	configRepo        *repositories.DataProviderConfigRepo
 	syncHistoryRepo   *repositories.VASyncHistoryRepo
 	pilotATSyncedRepo *repositories.PilotATSyncedRepo
@@ -30,7 +30,7 @@ type PilotSyncJob struct {
 // NewPilotSyncJob creates a new pilot sync job instance
 func NewPilotSyncJob(
 	db *gorm.DB,
-	cache *common.CacheService,
+	cache common.CacheInterface,
 	configRepo *repositories.DataProviderConfigRepo,
 	syncHistoryRepo *repositories.VASyncHistoryRepo,
 	pilotATSyncedRepo *repositories.PilotATSyncedRepo,

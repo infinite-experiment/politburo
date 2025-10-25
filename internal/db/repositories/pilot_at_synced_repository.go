@@ -81,3 +81,21 @@ func (r *PilotATSyncedRepo) UpdateUserAirtableID(ctx context.Context, userRoleID
 		Where("id = ?", userRoleID).
 		Update("airtable_pilot_id", airtableID).Error
 }
+
+// FindByATID finds a Pilot by VA ID and Airtable ID
+func (r *PilotATSyncedRepo) FindByATID(ctx context.Context, vaID string, atID string) (*gorm.PilotATSynced, error) {
+	var pilot gorm.PilotATSynced
+
+	err := r.db.WithContext(ctx).
+		Where("server_id = ? AND at_id = ?", vaID, atID).
+		First(&pilot).Error
+
+	if err != nil {
+		if err == gormlib.ErrRecordNotFound {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	return &pilot, nil
+}

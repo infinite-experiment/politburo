@@ -37,8 +37,9 @@ type RecordSet struct {
 
 // RecordWithID represents a record with its provider-specific ID
 type RecordWithID struct {
-	ID     string                 // Provider-specific record ID (e.g., Airtable rec...)
-	Fields map[string]interface{} // Record fields
+	ID          string                 // Provider-specific record ID (e.g., Airtable rec...)
+	Fields      map[string]interface{} // Record fields
+	CreatedTime string                 // Record creation time (ISO 8601 format)
 }
 
 // SyncFilters defines filters for fetching records

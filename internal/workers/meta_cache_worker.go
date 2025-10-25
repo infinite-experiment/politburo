@@ -10,44 +10,57 @@ import (
 	"time"
 )
 
-func StartCacheFiller(
-	c *common.CacheService,
-	api *common.LiveAPIService,
-	liveryRepo *repositories.AircraftLiveryRepository,
-	liverySvc *common.AircraftLiveryService,
-) {
+type MetaCacheWorker struct {
+	c          *common.CacheInterface
+	api        *common.LiveAPIService
+	liveryRepo *repositories.AircraftLiveryRepository
+	liverySvc  *common.AircraftLiveryService
+}
+
+func (m *MetaCacheWorker) Start() {
 	ticker := time.NewTicker(6 * time.Hour) // 4x daily sync
 	defer ticker.Stop()
 
 	// Initial sync on startup
-	syncAircraftLiveriesTask(c, api, liveryRepo, liverySvc)
-	refillWorldStatus(c, api)
+	m.syncAircraftLiveriesTask()
+	m.refillWorldStatus()
 
 	for range ticker.C {
-		refillWorldStatus(c, api)
-		syncAircraftLiveriesTask(c, api, liveryRepo, liverySvc)
+		m.refillWorldStatus()
+		m.syncAircraftLiveriesTask()
 	}
 }
 
-// syncAircraftLiveriesTask syncs aircraft/livery data from IF API to database with change detection
-func syncAircraftLiveriesTask(
-	c *common.CacheService,
+func NewMetaCacheFiller(
+	c *common.CacheInterface,
 	api *common.LiveAPIService,
 	liveryRepo *repositories.AircraftLiveryRepository,
 	liverySvc *common.AircraftLiveryService,
-) {
+) *MetaCacheWorker {
+
+	return &MetaCacheWorker{
+		c:          c,
+		api:        api,
+		liveryRepo: liveryRepo,
+		liverySvc:  liverySvc,
+	}
+
+}
+
+// syncAircraftLiveriesTask syncs aircraft/livery data from IF API to database with change detection
+func (m *MetaCacheWorker) syncAircraftLiveriesTask() {
 	ctx := context.Background()
 	startTime := time.Now()
 
 	// Fetch liveries from Infinite Flight API
-	resp, _, err := api.GetAircraftLiveries()
+	resp, _, err := m.api.GetAircraftLiveries()
 	if err != nil {
 		log.Printf("Error while fetching liveries from IF API: %s", err.Error())
 		return
 	}
 
 	// Load existing liveries from database into map for change detection
-	existingLiveries, err := liveryRepo.GetLiveryMap(ctx)
+	existingLiveries, err := m.liveryRepo.GetLiveryMap(ctx)
 	if err != nil {
 		log.Printf("Error while loading existing liveries from database: %s", err.Error())
 		return
@@ -92,14 +105,14 @@ func syncAircraftLiveriesTask(
 	hasChanges := len(toUpsert) > 0 || len(removedIDs) > 0
 
 	if len(toUpsert) > 0 {
-		if err := liveryRepo.UpsertBatch(ctx, toUpsert); err != nil {
+		if err := m.liveryRepo.UpsertBatch(ctx, toUpsert); err != nil {
 			log.Printf("Error while upserting liveries: %s", err.Error())
 			return
 		}
 	}
 
 	if len(removedIDs) > 0 {
-		if err := liveryRepo.MarkInactive(ctx, removedIDs); err != nil {
+		if err := m.liveryRepo.MarkInactive(ctx, removedIDs); err != nil {
 			log.Printf("Error while marking liveries inactive: %s", err.Error())
 			return
 		}
@@ -107,7 +120,7 @@ func syncAircraftLiveriesTask(
 
 	// Warm cache if changes detected (as per user requirement)
 	if hasChanges {
-		if err := liverySvc.WarmCache(ctx); err != nil {
+		if err := m.liverySvc.WarmCache(ctx); err != nil {
 			log.Printf("Error while warming livery cache: %s", err.Error())
 		}
 	}
@@ -124,12 +137,13 @@ func syncAircraftLiveriesTask(
 	)
 }
 
-func refillWorldStatus(c *common.CacheService, api *common.LiveAPIService) {
-	resp, err := api.GetSessions()
+func (m *MetaCacheWorker) refillWorldStatus() {
+	resp, err := m.api.GetSessions()
 
 	if err != nil {
 		return
 	}
+	c := *m.c
 
 	c.Set(string(constants.CachePrefixWorldDetails), resp.Result, 60000*time.Minute)
 	for _, world := range resp.Result {
