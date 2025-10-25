@@ -110,6 +110,10 @@ func RegisterRoutes(upSince time.Time) http.Handler {
 				// Pilot stats endpoint - comprehensive stats including game stats (future) and provider data
 				member.Get("/pilot/stats", handlers.GetPilotStats())
 
+				// PIREP filing endpoints
+				member.Get("/pireps/config", handlers.GetPirepConfig())
+				member.Post("/pireps/submit", handlers.SubmitPirep())
+
 				member.Get("/va/live", api.VaFlightsHandler(flightSvc))
 				member.Get("/live/sessions", api.LiveServers(flightSvc))
 
@@ -131,6 +135,9 @@ func RegisterRoutes(upSince time.Time) http.Handler {
 
 						// Data provider configuration management
 						admin.Post("/admin/data-provider/config", api.SaveDataProviderConfigHandler(deps))
+
+						// Flight mode configuration management
+						admin.Post("/va/flight-modes/config", handlers.SetFlightModesConfig())
 
 						// Background jobs management
 						admin.Post("/admin/jobs/sync-pilots", jobsHandler.TriggerPilotSync())

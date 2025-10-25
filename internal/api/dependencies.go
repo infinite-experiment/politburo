@@ -16,12 +16,14 @@ type Repositories struct {
 	Keys            repositories.KeysRepo
 	UserVASync      repositories.SyncRepository
 	Va              repositories.VARepository
+	VAGorm          *repositories.VAGormRepository
 	DataProviderCfg *repositories.DataProviderConfigRepo
 	VASyncHistory   *repositories.VASyncHistoryRepo
 	PilotATSynced   *repositories.PilotATSyncedRepo
 	RouteATSynced   *repositories.RouteATSyncedRepo
 	PirepATSynced   *repositories.PirepATSyncedRepo
 	AircraftLivery  *repositories.AircraftLiveryRepository
+	LiveryAirtableMapping *repositories.LiveryAirtableMappingRepository
 }
 
 type Services struct {
@@ -49,17 +51,19 @@ type Dependencies struct {
 func InitDependencies() (*Dependencies, error) {
 
 	repositories := &Repositories{
-		User:            *repositories.NewUserRepository(db.DB),
-		UserGorm:        repositories.NewUserRepositoryGORM(db.PgDB),
-		Keys:            *repositories.NewApiKeysRepo(db.DB),
-		Va:              *repositories.NewVARepository(db.DB),
-		UserVASync:      *repositories.NewSyncRepository(db.DB),
+		User:       *repositories.NewUserRepository(db.DB),
+		UserGorm:   repositories.NewUserRepositoryGORM(db.PgDB),
+		Keys:       *repositories.NewApiKeysRepo(db.DB),
+		Va:         *repositories.NewVARepository(db.DB),
+		VAGorm:     repositories.NewVAGormRepository(db.PgDB),
+		UserVASync: *repositories.NewSyncRepository(db.DB),
 		DataProviderCfg: repositories.NewDataProviderConfigRepo(db.PgDB),
 		VASyncHistory:   repositories.NewVASyncHistoryRepo(db.PgDB),
 		PilotATSynced:   repositories.NewPilotATSyncedRepo(db.PgDB),
 		RouteATSynced:   repositories.NewRouteATSyncedRepo(db.PgDB),
 		PirepATSynced:   repositories.NewPirepATSyncedRepo(db.PgDB),
 		AircraftLivery:  repositories.NewAircraftLiveryRepository(db.PgDB),
+		LiveryAirtableMapping: repositories.NewLiveryAirtableMappingRepository(db.PgDB),
 	}
 
 	// Initialize cache service (Redis or in-memory based on USE_REDIS_CACHE env var)

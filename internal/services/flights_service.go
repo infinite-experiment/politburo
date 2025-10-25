@@ -18,7 +18,7 @@ import (
 )
 
 type FlightsService struct {
-	Cache      *common.CacheService
+	Cache      common.CacheInterface
 	ApiService *common.LiveAPIService
 	Cfg        *common.VAConfigService
 	LiverySvc  *common.AircraftLiveryService
@@ -63,7 +63,7 @@ func SplitCallsign(raw string) (variable, prefix, suffix string) {
 }
 
 func NewFlightsService(
-	cache *common.CacheService,
+	cache common.CacheInterface,
 	liveApi *common.LiveAPIService,
 	cfgSvc *common.VAConfigService,
 	liverySvc *common.AircraftLiveryService,
@@ -135,12 +135,16 @@ func (svc *FlightsService) GetUserFlights(userId string, page int, sID string) (
 	}
 
 	uId := ""
+	username := ""
 	userFound := false
 	for _, res := range flt.Result {
 		log.Printf("Matching %s - %s", *res.DiscourseUsername, userId)
 		if strings.EqualFold(*res.DiscourseUsername, userId) {
 			userFound = true
 			uId = res.UserID
+			if res.DiscourseUsername != nil {
+				username = *res.DiscourseUsername
+			}
 			break
 		}
 	}
@@ -198,6 +202,7 @@ func (svc *FlightsService) GetUserFlights(userId string, page int, sID string) (
 			Violations: len(rec.Violations),
 			Duration:   dur,
 			Aircraft:   aircraftName,
+			Username:   username,
 		}
 		cacheKey := string(constants.CachePrefixFlightHistory) + rec.ID
 
