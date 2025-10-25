@@ -63,18 +63,7 @@ func (s *UserService) GetUserDetails(ctx context.Context, userDiscordID, vaDisco
 				IsActive: vaRole.IsActive,
 				Callsign: vaRole.Callsign,
 			}
-
-			// Fetch Airtable data if user is a member and has a role
-			if currentVA.IsMember && currentVA.Role != "" && s.pilotStatsService != nil {
-				pilotStatus, err := s.pilotStatsService.GetPilotStatusByCallsign(ctx, userDiscordID, vaRole.VAID)
-				if err != nil {
-					// Log error but don't fail the request - Airtable data is optional
-					log.Printf("[GetUserDetails] Failed to fetch Airtable data for user %s: %v", userDiscordID, err)
-				} else {
-					// Add Airtable data to current VA status
-					currentVA.AirtableData = pilotStatus.RawFields
-				}
-			}
+			// Note: Pilot stats (including Airtable data) are now fetched via separate /api/v1/pilot/stats endpoint
 		}
 	}
 

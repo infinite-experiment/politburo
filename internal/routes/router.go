@@ -62,9 +62,15 @@ func RegisterRoutes(upSince time.Time) http.Handler {
 	go workers.StartCacheFiller(legacyCacheSvc, liveSvc, deps.Repo.AircraftLivery, deps.Services.AircraftLivery)
 
 	// Setup scheduled jobs
-	// Pilot sync job - syncs pilots from Airtable every hour
-	pilotSyncJob := jobs.NewPilotSyncJob(db.PgDB, legacyCacheSvc, deps.Repo.DataProviderCfg)
-	go pilotSyncJob.RunScheduled(context.Background(), 1*time.Hour)
+	pilotSyncJob := jobs.InitializeJobs(
+		context.Background(),
+		db.PgDB,
+		legacyCacheSvc,
+		deps.Repo.DataProviderCfg,
+		deps.Repo.VASyncHistory,
+		deps.Repo.PilotATSynced,
+		cfgSvc,
+	)
 
 	// Initialize jobs handler for manual triggering
 	jobsHandler := api.NewJobsHandler(pilotSyncJob)
@@ -89,10 +95,8 @@ func RegisterRoutes(upSince time.Time) http.Handler {
 			registered.Group(func(member chi.Router) {
 				member.Use(middleware.IsMemberMiddleware())
 
-				// NEW: User details endpoint with GORM
-
-				// NEW: Pilot stats from Airtable
-				member.Get("/user/pilot-stats", api.GetPilotStatsHandler(deps))
+				// Pilot stats endpoint - comprehensive stats including game stats (future) and provider data
+				member.Get("/pilot/stats", handlers.GetPilotStats())
 
 				member.Get("/va/live", api.VaFlightsHandler(flightSvc))
 				member.Get("/live/sessions", api.LiveServers(flightSvc))

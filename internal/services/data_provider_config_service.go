@@ -180,6 +180,19 @@ func (s *DataProviderConfigService) validateConfigRequest(req *dtos.SaveProvider
 			if !allowedTypes[field.DataType] {
 				return fmt.Errorf("schema[%d].fields[%d]: invalid data_type '%s' (allowed: string, int, float, boolean, date)", i, j, field.DataType)
 			}
+
+			// Validate display_format if provided
+			if field.DisplayFormat != nil {
+				allowedFormats := map[string]bool{
+					"duration": true, "date": true, "datetime": true, "number": true,
+				}
+				if !allowedFormats[*field.DisplayFormat] {
+					return fmt.Errorf("schema[%d].fields[%d]: invalid display_format '%s' (allowed: duration, date, datetime, number)", i, j, *field.DisplayFormat)
+				}
+			}
+
+			// Note: display_name and is_user_visible are optional and don't require validation
+			// If is_user_visible is not set, it defaults to false (field won't be shown in user APIs)
 		}
 	}
 

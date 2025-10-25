@@ -31,6 +31,11 @@ type FieldMapping struct {
 	DataType     string  `json:"data_type"`     // "string", "int", "float", "date", "boolean"
 	Required     bool    `json:"required"`
 	DefaultValue *string `json:"default_value,omitempty"`
+
+	// Display/presentation layer for user-facing APIs
+	DisplayName   string  `json:"display_name,omitempty"`    // Standardized field name: "flight_hours", "rank", etc.
+	IsUserVisible bool    `json:"is_user_visible"`           // Show in user-facing APIs like /api/v1/pilot/stats
+	DisplayFormat *string `json:"display_format,omitempty"`  // Optional formatting hint: "duration", "date", etc.
 }
 
 // SyncSettings defines sync behavior preferences

@@ -1,6 +1,7 @@
 package api
 
 import (
+	"fmt"
 	"infinite-experiment/politburo/internal/auth"
 	"infinite-experiment/politburo/internal/common"
 	"infinite-experiment/politburo/internal/constants"
@@ -9,7 +10,7 @@ import (
 	"time"
 )
 
-// GetPilotStatsHandler handles GET /api/v1/user/pilot-stats
+// GetPilotStatsHandler handles GET /api/v1/pilot/stats
 func GetPilotStatsHandler(deps *Dependencies) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		initTime := time.Now()
@@ -22,10 +23,17 @@ func GetPilotStatsHandler(deps *Dependencies) http.HandlerFunc {
 		}
 
 		userDiscordID := claims.DiscordUserID()
-		vaServerID := claims.DiscordServerID()
+		vaDiscordServerID := claims.DiscordServerID()
+		vaUUId := claims.ServerID()
 
-		// Call service to fetch pilot stats
-		stats, err := deps.Services.PilotStats.GetPilotStats(r.Context(), userDiscordID, vaServerID)
+		// Get VA by Discord server ID
+		if vaDiscordServerID == "" {
+			common.RespondError(w, initTime, fmt.Errorf("not in a VA Server"), "Virtual airline not found", http.StatusNotFound)
+			return
+		}
+
+		// Fetch pilot stats (returns standardized mapped data)
+		stats, err := deps.Services.PilotStats.GetPilotStats(r.Context(), userDiscordID, vaUUId)
 		if err != nil {
 			handlePilotStatsError(w, initTime, err)
 			return
@@ -33,6 +41,11 @@ func GetPilotStatsHandler(deps *Dependencies) http.HandlerFunc {
 
 		common.RespondSuccess(w, initTime, "Pilot stats fetched successfully", stats)
 	}
+}
+
+// Handler method wrapper
+func (h *Handlers) GetPilotStats() http.HandlerFunc {
+	return GetPilotStatsHandler(h.deps)
 }
 
 // handlePilotStatsError maps service errors to appropriate HTTP responses

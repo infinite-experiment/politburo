@@ -27,10 +27,10 @@ type VAAffiliation struct {
 }
 
 // CurrentVAStatus represents the user's status in the current VA context
+// Note: Pilot stats (including provider data) are now available via GET /api/v1/pilot/stats
 type CurrentVAStatus struct {
-	IsMember     bool                   `json:"is_member"`
-	Role         string                 `json:"role,omitempty"`
-	IsActive     bool                   `json:"is_active"`
-	Callsign     string                 `json:"callsign,omitempty"`
-	AirtableData map[string]interface{} `json:"airtable_data,omitempty"` // Raw Airtable fields if user is a member
+	IsMember bool   `json:"is_member"`
+	Role     string `json:"role,omitempty"`
+	IsActive bool   `json:"is_active"`
+	Callsign string `json:"callsign,omitempty"`
 }

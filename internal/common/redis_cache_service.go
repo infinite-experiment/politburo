@@ -86,8 +86,14 @@ func (r *RedisCacheService) Get(key string) (interface{}, bool) {
 		return nil, false
 	}
 
-	// Return raw JSON string - caller will unmarshal
-	return data, true
+	// Unmarshal JSON back to generic interface{}
+	var result interface{}
+	if err := json.Unmarshal([]byte(data), &result); err != nil {
+		fmt.Printf("Redis cache: failed to unmarshal value for key %s: %v\n", key, err)
+		return nil, false
+	}
+
+	return result, true
 }
 
 // Delete removes a value from Redis by key

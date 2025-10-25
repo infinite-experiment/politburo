@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 	"infinite-experiment/politburo/internal/common"
+	"infinite-experiment/politburo/internal/constants"
 	"infinite-experiment/politburo/internal/db/repositories"
 	"infinite-experiment/politburo/internal/models/dtos"
+	gormModels "infinite-experiment/politburo/internal/models/gorm"
 	"infinite-experiment/politburo/internal/providers"
 	"log"
 	"strings"
@@ -16,10 +18,13 @@ import (
 
 // PilotSyncJob handles syncing pilot data from Airtable to local database
 type PilotSyncJob struct {
-	db               *gorm.DB
-	cache            *common.CacheService
-	configRepo       *repositories.DataProviderConfigRepo
-	airtableProvider *providers.AirtableProvider
+	db                *gorm.DB
+	cache             *common.CacheService
+	configRepo        *repositories.DataProviderConfigRepo
+	syncHistoryRepo   *repositories.VASyncHistoryRepo
+	pilotATSyncedRepo *repositories.PilotATSyncedRepo
+	linkingJob        *PilotLinkingJob
+	airtableProvider  *providers.AirtableProvider
 }
 
 // NewPilotSyncJob creates a new pilot sync job instance
@@ -27,12 +32,18 @@ func NewPilotSyncJob(
 	db *gorm.DB,
 	cache *common.CacheService,
 	configRepo *repositories.DataProviderConfigRepo,
+	syncHistoryRepo *repositories.VASyncHistoryRepo,
+	pilotATSyncedRepo *repositories.PilotATSyncedRepo,
+	vaConfigService *common.VAConfigService,
 ) *PilotSyncJob {
 	return &PilotSyncJob{
-		db:               db,
-		cache:            cache,
-		configRepo:       configRepo,
-		airtableProvider: providers.NewAirtableProvider(cache),
+		db:                db,
+		cache:             cache,
+		configRepo:        configRepo,
+		syncHistoryRepo:   syncHistoryRepo,
+		pilotATSyncedRepo: pilotATSyncedRepo,
+		linkingJob:        NewPilotLinkingJob(db, vaConfigService, pilotATSyncedRepo),
+		airtableProvider:  providers.NewAirtableProvider(cache),
 	}
 }
 
@@ -189,10 +200,16 @@ func (j *PilotSyncJob) SyncVAPilots(ctx context.Context, vaID string) (int, erro
 	log.Printf("[PilotSyncJob] VA %s: Completed in %s. Synced: %d, Errors: %d",
 		vaName, time.Since(start).Truncate(time.Millisecond), syncedCount, errorCount)
 
+	// Record successful sync in sync history
+	if err := j.syncHistoryRepo.RecordSync(ctx, vaID, constants.SyncEventPilotsAT); err != nil {
+		log.Printf("[PilotSyncJob] VA %s: Warning - failed to record sync history: %v", vaName, err)
+		// Don't fail the sync operation if history recording fails
+	}
+
 	return syncedCount, nil
 }
 
-// upsertPilot updates or creates a pilot record in va_user_roles
+// upsertPilot updates or creates a pilot record in va_user_roles and pilot_at_synced
 func (j *PilotSyncJob) upsertPilot(ctx context.Context, vaID string, airtableRecordID string, record map[string]interface{}, schema *dtos.EntitySchema) error {
 	// Extract callsign from record using field mapping
 	callsignField := schema.GetFieldMapping("callsign")
@@ -216,9 +233,16 @@ func (j *PilotSyncJob) upsertPilot(ctx context.Context, vaID string, airtableRec
 		return fmt.Errorf("callsign is empty")
 	}
 
+	// Upsert into pilot_at_synced table first (keeps our database in sync with Airtable)
+	pilotATSynced := &gormModels.PilotATSynced{
+		ATID:       airtableRecordID,
+		Callsign:   callsign,
+		Registered: false, // Will be updated to true if found in va_user_roles
+		ServerID:   vaID,
+	}
+
 	// Find user by callsign in va_user_roles for this VA
-	// If found, update airtable_pilot_id
-	// The callsign should already exist in the database from user registration
+	// If found, update airtable_pilot_id and mark as registered
 
 	var existingRole struct {
 		ID       string  `gorm:"column:id"`
@@ -237,12 +261,24 @@ func (j *PilotSyncJob) upsertPilot(ctx context.Context, vaID string, airtableRec
 		if err == gorm.ErrRecordNotFound {
 			// Pilot not found in database - this is expected for pilots who haven't registered yet
 			log.Printf("[PilotSyncJob] Callsign %s not found in VA %s - pilot may not be registered yet", callsign, vaID)
+			// Still upsert into pilot_at_synced with registered=false
+			if err := j.pilotATSyncedRepo.Upsert(ctx, pilotATSynced); err != nil {
+				log.Printf("[PilotSyncJob] Warning: failed to upsert into pilot_at_synced: %v", err)
+			}
 			return nil
 		}
 		return fmt.Errorf("failed to query existing role: %w", err)
 	}
 
-	// Update the airtable_pilot_id and updated_at timestamp
+	// User found - mark as registered
+	pilotATSynced.Registered = true
+
+	// Upsert into pilot_at_synced
+	if err := j.pilotATSyncedRepo.Upsert(ctx, pilotATSynced); err != nil {
+		log.Printf("[PilotSyncJob] Warning: failed to upsert into pilot_at_synced: %v", err)
+	}
+
+	// Update the airtable_pilot_id and updated_at timestamp in va_user_roles
 	err = j.db.WithContext(ctx).
 		Table("va_user_roles").
 		Where("id = ?", existingRole.ID).
@@ -264,29 +300,52 @@ func (j *PilotSyncJob) upsertPilot(ctx context.Context, vaID string, airtableRec
 	return nil
 }
 
-// getLastSyncTimestamp gets the most recent updated_at timestamp for pilots in this VA
+// getLastSyncTimestamp gets the most recent sync timestamp for this VA from sync history
 // This is used for incremental syncing - only fetch records modified after this time
 func (j *PilotSyncJob) getLastSyncTimestamp(ctx context.Context, vaID string) (*string, error) {
-	var lastUpdated *time.Time
-
-	err := j.db.WithContext(ctx).
-		Table("va_user_roles").
-		Select("MAX(updated_at) as last_updated").
-		Where("va_id = ? AND airtable_pilot_id IS NOT NULL", vaID).
-		Scan(&lastUpdated).Error
+	lastSyncTime, err := j.syncHistoryRepo.GetLastSyncTimeForEvent(ctx, constants.SyncEventPilotsAT)
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to query last sync timestamp: %w", err)
 	}
 
-	// If no records found or timestamp is null, return nil (do full sync)
-	if lastUpdated == nil {
+	// If no sync history found, return nil (do full sync)
+	if lastSyncTime == nil {
 		return nil, nil
 	}
 
 	// Format as ISO 8601 string for Airtable filtering
-	timestamp := lastUpdated.Format(time.RFC3339)
+	timestamp := lastSyncTime.Format(time.RFC3339)
 	return &timestamp, nil
+}
+
+// shouldRunInitialSync checks if enough time has passed since the last sync
+// Returns true if the last sync was more than 4 hours ago or if no sync has occurred
+func (j *PilotSyncJob) shouldRunInitialSync(ctx context.Context) bool {
+	lastSyncTime, err := j.syncHistoryRepo.GetLastSyncTimeForEvent(ctx, constants.SyncEventPilotsAT)
+
+	if err != nil {
+		log.Printf("[PilotSyncJob] Error checking last sync time: %v. Running sync anyway.", err)
+		return true
+	}
+
+	// If no sync history found, run the sync
+	if lastSyncTime == nil {
+		log.Printf("[PilotSyncJob] No previous sync found. Running initial sync.")
+		return true
+	}
+
+	// Check if more than 4 hours have passed
+	timeSinceLastSync := time.Since(*lastSyncTime)
+	fourHours := 4 * time.Hour
+
+	if timeSinceLastSync > fourHours {
+		log.Printf("[PilotSyncJob] Last sync was %s ago (> 4 hours). Running sync.", timeSinceLastSync.Truncate(time.Minute))
+		return true
+	}
+
+	log.Printf("[PilotSyncJob] Last sync was %s ago (< 4 hours). Skipping initial sync.", timeSinceLastSync.Truncate(time.Minute))
+	return false
 }
 
 // RunScheduled runs the pilot sync job on a schedule (e.g., every hour)
@@ -294,9 +353,16 @@ func (j *PilotSyncJob) RunScheduled(ctx context.Context, interval time.Duration)
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
-	// Run immediately on start
-	if err := j.Run(ctx); err != nil {
-		log.Printf("[PilotSyncJob] Error in initial run: %v", err)
+	// Run immediately on start only if last sync was more than 4 hours ago
+	if j.shouldRunInitialSync(ctx) {
+		if err := j.Run(ctx); err != nil {
+			log.Printf("[PilotSyncJob] Error in initial run: %v", err)
+		}
+	}
+
+	// Always run pilot linking after sync (even if sync was skipped)
+	if err := j.linkingJob.Run(ctx); err != nil {
+		log.Printf("[PilotLinkingJob] Error in initial linking: %v", err)
 	}
 
 	for {
@@ -304,6 +370,10 @@ func (j *PilotSyncJob) RunScheduled(ctx context.Context, interval time.Duration)
 		case <-ticker.C:
 			if err := j.Run(ctx); err != nil {
 				log.Printf("[PilotSyncJob] Error in scheduled run: %v", err)
+			}
+			// Run linking after each scheduled sync
+			if err := j.linkingJob.Run(ctx); err != nil {
+				log.Printf("[PilotLinkingJob] Error in scheduled linking: %v", err)
 			}
 		case <-ctx.Done():
 			log.Printf("[PilotSyncJob] Shutting down scheduled sync")

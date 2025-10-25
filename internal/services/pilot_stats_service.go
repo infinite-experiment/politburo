@@ -9,7 +9,9 @@ import (
 	"infinite-experiment/politburo/internal/db/repositories"
 	"infinite-experiment/politburo/internal/models"
 	"infinite-experiment/politburo/internal/models/dtos"
+	"infinite-experiment/politburo/internal/models/dtos/responses"
 	"infinite-experiment/politburo/internal/providers"
+	"log"
 	"time"
 
 	"github.com/jmoiron/sqlx"
@@ -43,99 +45,6 @@ func NewPilotStatsService(
 		vaConfigService:  vaConfigService,
 		airtableProvider: providers.NewAirtableProvider(cache),
 	}
-}
-
-// GetPilotStats fetches pilot stats from Airtable for the authenticated user
-func (s *PilotStatsService) GetPilotStats(ctx context.Context, userDiscordID, vaID string) (*PilotStatsResponse, error) {
-	// Step 1: Get user's VA membership to find airtable_pilot_id
-	membership, err := s.getUserMembership(ctx, userDiscordID, vaID)
-	if err != nil {
-		return nil, &PilotStatsError{
-			Code:    constants.ErrCodePilotNotSynced,
-			Message: constants.GetErrorMessage(constants.ErrCodePilotNotSynced),
-			Err:     err,
-		}
-	}
-
-	// Step 2: Validate airtable_pilot_id exists
-	if membership.AirtablePilotID == nil || *membership.AirtablePilotID == "" {
-		return nil, &PilotStatsError{
-			Code:    constants.ErrCodePilotAirtableIDMissing,
-			Message: constants.GetErrorMessage(constants.ErrCodePilotAirtableIDMissing),
-		}
-	}
-
-	airtablePilotID := *membership.AirtablePilotID
-
-	// Step 3: Get active Airtable config for VA
-	config, configData, err := s.getActiveAirtableConfig(ctx, vaID)
-	if err != nil {
-		return nil, err
-	}
-
-	// Step 4: Check cache first
-	cacheKey := fmt.Sprintf("pilot_stats:%s:%s", vaID, airtablePilotID)
-	if cachedData, found := s.cache.Get(cacheKey); found {
-		if stats, ok := cachedData.(*PilotStatsResponse); ok {
-			stats.Metadata.Cached = true
-			return stats, nil
-		}
-	}
-
-	// Step 5: Get pilot schema from config
-	pilotSchema := configData.GetSchemaByType("pilot")
-	if pilotSchema == nil {
-		return nil, &PilotStatsError{
-			Code:    constants.ErrCodeConfigMalformed,
-			Message: "Pilot schema not found in configuration",
-		}
-	}
-
-	// Step 6: Fetch from Airtable
-	ctx = context.WithValue(ctx, "provider_config", configData)
-	pilotRecord, err := s.airtableProvider.FetchPilotRecord(ctx, airtablePilotID, pilotSchema)
-	if err != nil {
-		// Check if it's a provider error
-		if provErr, ok := err.(*providers.ProviderError); ok {
-			// Map to pilot-specific error if record not found
-			if provErr.Code == constants.ErrCodeInvalidBaseID {
-				return nil, &PilotStatsError{
-					Code:    constants.ErrCodePilotNotFoundInAirtable,
-					Message: constants.GetErrorMessage(constants.ErrCodePilotNotFoundInAirtable),
-					Err:     err,
-				}
-			}
-			return nil, &PilotStatsError{
-				Code:    provErr.Code,
-				Message: provErr.Message,
-				Err:     err,
-			}
-		}
-		return nil, &PilotStatsError{
-			Code:    constants.ErrCodeNetworkError,
-			Message: constants.GetErrorMessage(constants.ErrCodeNetworkError),
-			Err:     err,
-		}
-	}
-
-	// Step 7: Build response
-	response := &PilotStatsResponse{
-		AirtablePilotID: airtablePilotID,
-		Raw:             pilotRecord.RawFields,
-		Normalized:      pilotRecord.Normalized,
-		Metadata: PilotStatsMetadata{
-			SchemaVersion: configData.Version,
-			LastFetched:   time.Now().Format(time.RFC3339),
-			Cached:        false,
-			VAName:        membership.VAName,
-			ConfigActive:  config.IsActive,
-		},
-	}
-
-	// Step 8: Cache the result (15 minutes TTL)
-	s.cache.Set(cacheKey, response, 15*time.Minute)
-
-	return response, nil
 }
 
 // getUserMembership fetches the user's membership in the VA
@@ -195,23 +104,6 @@ func (s *PilotStatsService) getActiveAirtableConfig(ctx context.Context, vaID st
 	}
 
 	return config, configData, nil
-}
-
-// PilotStatsResponse represents the API response for pilot stats
-type PilotStatsResponse struct {
-	AirtablePilotID string                 `json:"airtable_pilot_id"`
-	Raw             map[string]interface{} `json:"raw"`
-	Normalized      map[string]interface{} `json:"normalized"`
-	Metadata        PilotStatsMetadata     `json:"metadata"`
-}
-
-// PilotStatsMetadata contains metadata about the response
-type PilotStatsMetadata struct {
-	SchemaVersion string `json:"schema_version"`
-	LastFetched   string `json:"last_fetched"`
-	Cached        bool   `json:"cached"`
-	VAName        string `json:"va_name"`
-	ConfigActive  bool   `json:"config_active"`
 }
 
 // MembershipWithAirtable extends membership data with Airtable ID
@@ -371,6 +263,224 @@ type PilotStatusMetadata struct {
 	FetchedAt     string `json:"fetched_at"`
 	VAName        string `json:"va_name"`
 	ConfigActive  bool   `json:"config_active"`
+}
+
+// GetPilotStats fetches comprehensive pilot statistics (game stats + provider data)
+// This is the main entry point for the GET /api/v1/pilot/stats endpoint
+func (s *PilotStatsService) GetPilotStats(ctx context.Context, userDiscordID, vaID string) (*responses.PilotStatsResponse, error) {
+	response := &responses.PilotStatsResponse{
+		Metadata: responses.PilotStatsMetadata{
+			LastFetched:        time.Now().Format(time.RFC3339),
+			Cached:             false,
+			ProviderConfigured: false,
+		},
+	}
+
+	// Get user membership to get VA name
+	membership, err := s.getUserMembership(ctx, userDiscordID, vaID)
+	if err != nil {
+		return nil, &PilotStatsError{
+			Code:    constants.ErrCodePilotNotSynced,
+			Message: "User is not a member of this VA",
+			Err:     err,
+		}
+	}
+
+	response.Metadata.VAName = membership.VAName
+
+	// Future: Fetch IF game stats from Live API
+	// gameStats, err := s.fetchIFGameStats(ctx, userDiscordID)
+	// if err == nil {
+	//     response.GameStats = gameStats
+	// }
+
+	// Fetch provider data (Airtable, etc.)
+	providerData, cached, err := s.fetchProviderData(ctx, userDiscordID, vaID)
+	if err != nil {
+		// Provider data is optional - log but don't fail
+		log.Printf("[GetPilotStats] Provider data unavailable for user %s in VA %s: %v", userDiscordID, vaID, err)
+	} else {
+		response.ProviderData = providerData
+		response.Metadata.ProviderConfigured = true
+		response.Metadata.Cached = cached
+	}
+
+	return response, nil
+}
+
+// fetchProviderData fetches and transforms data from the configured provider
+func (s *PilotStatsService) fetchProviderData(ctx context.Context, userDiscordID, vaID string) (*responses.ProviderPilotData, bool, error) {
+	// Get active config
+	_, configData, err := s.getActiveAirtableConfig(ctx, vaID)
+	if err != nil {
+		return nil, false, err
+	}
+
+	// Get pilot schema
+	pilotSchema := configData.GetSchemaByType("pilot")
+	if pilotSchema == nil {
+		return nil, false, &PilotStatsError{
+			Code:    constants.ErrCodeConfigMalformed,
+			Message: "Pilot schema not found in configuration",
+		}
+	}
+
+	// Get user's airtable_pilot_id
+	membership, err := s.getUserMembership(ctx, userDiscordID, vaID)
+	if err != nil {
+		return nil, false, err
+	}
+
+	if membership.AirtablePilotID == nil || *membership.AirtablePilotID == "" {
+		return nil, false, &PilotStatsError{
+			Code:    constants.ErrCodePilotAirtableIDMissing,
+			Message: "Pilot not synced with Airtable",
+		}
+	}
+
+	airtablePilotID := *membership.AirtablePilotID
+
+	// Check cache
+	cacheKey := fmt.Sprintf("pilot_stats:%s:%s", vaID, airtablePilotID)
+	if cachedData, found := s.cache.Get(cacheKey); found {
+		if data, ok := cachedData.(*responses.ProviderPilotData); ok {
+			log.Printf("[fetchProviderData] Cache hit for pilot %s in VA %s", airtablePilotID, vaID)
+			_ = data // Temporarily ignoring cache
+			// return data, true, nil
+		}
+	}
+
+	log.Printf("[fetchProviderData] Fetching from Airtable for pilot %s in VA %s", airtablePilotID, vaID)
+	// Fetch from provider
+	ctx = context.WithValue(ctx, "provider_config", configData)
+	pilotRecord, err := s.airtableProvider.FetchPilotRecord(ctx, airtablePilotID, pilotSchema)
+	if err != nil {
+		// Check if it's a provider error
+		if provErr, ok := err.(*providers.ProviderError); ok {
+			return nil, false, &PilotStatsError{
+				Code:    provErr.Code,
+				Message: provErr.Message,
+				Err:     err,
+			}
+		}
+		return nil, false, &PilotStatsError{
+			Code:    constants.ErrCodeNetworkError,
+			Message: constants.GetErrorMessage(constants.ErrCodeNetworkError),
+			Err:     err,
+		}
+	}
+
+	// Log raw fields from Airtable
+	log.Printf("[fetchProviderData] Raw fields from Airtable:")
+	rawJSON, _ := json.MarshalIndent(pilotRecord.RawFields, "", "  ")
+	log.Printf("%s", string(rawJSON))
+
+	// Log schema fields for debugging
+	log.Printf("[fetchProviderData] Schema fields configuration:")
+	for _, field := range pilotSchema.Fields {
+		log.Printf("  - AirtableName: %s, InternalName: %s, DisplayName: %s, IsUserVisible: %v",
+			field.AirtableName, field.InternalName, field.DisplayName, field.IsUserVisible)
+	}
+
+	// Transform to standardized response
+	providerData := s.transformToStandardizedFields(pilotRecord.RawFields, pilotSchema)
+
+	// Log transformed data
+	log.Printf("[fetchProviderData] Transformed provider data:")
+	transformedJSON, _ := json.MarshalIndent(providerData, "", "  ")
+	log.Printf("%s", string(transformedJSON))
+
+	// Cache the result (10 minutes)
+	s.cache.Set(cacheKey, providerData, 10*time.Minute)
+
+	return providerData, false, nil
+}
+
+// transformToStandardizedFields maps raw provider data to standardized API response
+// It uses the DisplayName field in the schema to map to standard field names
+func (s *PilotStatsService) transformToStandardizedFields(
+	rawFields map[string]interface{},
+	schema *dtos.EntitySchema,
+) *responses.ProviderPilotData {
+	data := &responses.ProviderPilotData{
+		AdditionalFields: make(map[string]interface{}),
+	}
+
+	for _, field := range schema.Fields {
+		// TODO: Re-enable this check once schema is properly configured
+		// Skip non-visible fields
+		// if !field.IsUserVisible {
+		// 	continue
+		// }
+
+		// Get value from raw data using the provider field name
+		value, exists := rawFields[field.AirtableName]
+		if !exists {
+			continue
+		}
+
+		// Map to standardized field based on display_name or internal_name
+		displayOrInternalName := field.DisplayName
+		if displayOrInternalName == "" {
+			displayOrInternalName = field.InternalName
+		}
+
+		switch displayOrInternalName {
+		case "flight_hours":
+			data.FlightHours = &value
+
+		case "rank":
+			if v, ok := value.(string); ok {
+				data.Rank = &v
+			}
+
+		case "join_date":
+			if v, ok := value.(string); ok {
+				data.JoinDate = &v
+			}
+
+		case "last_activity":
+			if v, ok := value.(string); ok {
+				data.LastActivity = &v
+			}
+
+		case "last_flight":
+			if v, ok := value.(string); ok {
+				data.LastFlight = &v
+			}
+
+		case "region":
+			if v, ok := value.(string); ok {
+				data.Region = &v
+			}
+
+		case "total_flights":
+			// Handle both float and int types
+			if v, ok := value.(float64); ok {
+				intVal := int(v)
+				data.TotalFlights = &intVal
+			} else if v, ok := value.(int); ok {
+				data.TotalFlights = &v
+			}
+
+		case "status":
+			if v, ok := value.(string); ok {
+				data.Status = &v
+			}
+
+		default:
+			// Non-standard field - add to additional_fields
+			if field.DisplayName != "" {
+				// Use the display_name as the key
+				data.AdditionalFields[field.DisplayName] = value
+			} else {
+				// If no display_name, use internal_name
+				data.AdditionalFields[field.InternalName] = value
+			}
+		}
+	}
+
+	return data
 }
 
 // PilotStatsError represents a pilot stats specific error

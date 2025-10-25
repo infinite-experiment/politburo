@@ -11,18 +11,20 @@ import (
 )
 
 type Repositories struct {
-	User            repositories.UserRepository
-	UserGorm        *repositories.UserRepositoryGORM
-	Keys            repositories.KeysRepo
-	UserVASync      repositories.SyncRepository
-	Va              repositories.VARepository
-	DataProviderCfg *repositories.DataProviderConfigRepo
-	AircraftLivery  *repositories.AircraftLiveryRepository
+	User             repositories.UserRepository
+	UserGorm         *repositories.UserRepositoryGORM
+	Keys             repositories.KeysRepo
+	UserVASync       repositories.SyncRepository
+	Va               repositories.VARepository
+	DataProviderCfg  *repositories.DataProviderConfigRepo
+	VASyncHistory    *repositories.VASyncHistoryRepo
+	PilotATSynced    *repositories.PilotATSyncedRepo
+	AircraftLivery   *repositories.AircraftLiveryRepository
 }
 
 type Services struct {
-	Cache              common.CacheInterface  // Changed to interface to support Redis or in-memory
-	LegacyCache        *common.CacheService   // For services that haven't been migrated to interface yet
+	Cache              common.CacheInterface // Changed to interface to support Redis or in-memory
+	LegacyCache        *common.CacheService  // For services that haven't been migrated to interface yet
 	Live               common.LiveAPIService
 	User               *services.UserService
 	Reg                services.RegistrationService
@@ -50,6 +52,8 @@ func InitDependencies() (*Dependencies, error) {
 		Va:              *repositories.NewVARepository(db.DB),
 		UserVASync:      *repositories.NewSyncRepository(db.DB),
 		DataProviderCfg: repositories.NewDataProviderConfigRepo(db.PgDB),
+		VASyncHistory:   repositories.NewVASyncHistoryRepo(db.PgDB),
+		PilotATSynced:   repositories.NewPilotATSyncedRepo(db.PgDB),
 		AircraftLivery:  repositories.NewAircraftLiveryRepository(db.PgDB),
 	}
 
@@ -81,7 +85,7 @@ func InitDependencies() (*Dependencies, error) {
 	}
 
 	liveSvc := common.NewLiveAPIService()
-	confSvc := common.NewVAConfigService(&repositories.Va, legacyCache)
+	confSvc := common.NewVAConfigService(&repositories.Va, cacheSvc)
 
 	// Initialize providers
 	liveAPIProvider := providers.NewLiveAPIProvider()
