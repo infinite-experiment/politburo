@@ -8,6 +8,8 @@ import (
 	"infinite-experiment/politburo/internal/services"
 	"log"
 	"os"
+
+	"github.com/redis/go-redis/v9"
 )
 
 type Repositories struct {
@@ -70,10 +72,10 @@ func InitDependencies() (*Dependencies, error) {
 	// Initialize cache service (Redis or in-memory based on USE_REDIS_CACHE env var)
 	var cacheSvc common.CacheInterface
 	useRedis := os.Getenv("USE_REDIS_CACHE") == "true"
-
-	var redisQSvc common.RedisQueueService
+	var redisClient *redis.Client
 	if useRedis {
-		redisClient := common.NewRedisClient()
+		// Initialize Redis client (used by both cache and queue services)
+		redisClient = common.NewRedisClient()
 		redisCache, err := common.NewRedisCacheService(redisClient)
 		if err != nil {
 			log.Printf("Failed to initialize Redis cache, falling back to in-memory: %v", err)
@@ -81,12 +83,15 @@ func InitDependencies() (*Dependencies, error) {
 		} else {
 			log.Println("Using Redis cache")
 			cacheSvc = redisCache
-			redisQSvc = *common.NewRedisQueueService(redisClient)
 		}
 	} else {
 		log.Println("Using in-memory cache")
 		cacheSvc = common.NewCacheService(60000, 600)
 	}
+
+	// Always initialize RedisQueueService (required for PIREP queue processing)
+	// Uses the same Redis client as cache for efficiency
+	redisQSvc := *common.NewRedisQueueService(redisClient)
 
 	// Create legacy cache wrapper for services that still need *CacheService
 	var legacyCache *common.CacheService
