@@ -11,18 +11,18 @@ import (
 )
 
 type Repositories struct {
-	User            repositories.UserRepository
-	UserGorm        *repositories.UserRepositoryGORM
-	Keys            repositories.KeysRepo
-	UserVASync      repositories.SyncRepository
-	Va              repositories.VARepository
-	VAGorm          *repositories.VAGormRepository
-	DataProviderCfg *repositories.DataProviderConfigRepo
-	VASyncHistory   *repositories.VASyncHistoryRepo
-	PilotATSynced   *repositories.PilotATSyncedRepo
-	RouteATSynced   *repositories.RouteATSyncedRepo
-	PirepATSynced   *repositories.PirepATSyncedRepo
-	AircraftLivery  *repositories.AircraftLiveryRepository
+	User                  repositories.UserRepository
+	UserGorm              *repositories.UserRepositoryGORM
+	Keys                  repositories.KeysRepo
+	UserVASync            repositories.SyncRepository
+	Va                    repositories.VARepository
+	VAGorm                *repositories.VAGormRepository
+	DataProviderCfg       *repositories.DataProviderConfigRepo
+	VASyncHistory         *repositories.VASyncHistoryRepo
+	PilotATSynced         *repositories.PilotATSyncedRepo
+	RouteATSynced         *repositories.RouteATSyncedRepo
+	PirepATSynced         *repositories.PirepATSyncedRepo
+	AircraftLivery        *repositories.AircraftLiveryRepository
 	LiveryAirtableMapping *repositories.LiveryAirtableMappingRepository
 }
 
@@ -36,6 +36,7 @@ type Services struct {
 	Conf               common.VAConfigService
 	VaMgmt             services.VAManagementService
 	AirtableApi        common.AirtableApiService
+	AirtableProvider   *providers.AirtableProvider
 	AirtableSync       services.AtSyncService
 	Flights            services.FlightsService
 	PilotStats         *services.PilotStatsService
@@ -51,18 +52,18 @@ type Dependencies struct {
 func InitDependencies() (*Dependencies, error) {
 
 	repositories := &Repositories{
-		User:       *repositories.NewUserRepository(db.DB),
-		UserGorm:   repositories.NewUserRepositoryGORM(db.PgDB),
-		Keys:       *repositories.NewApiKeysRepo(db.DB),
-		Va:         *repositories.NewVARepository(db.DB),
-		VAGorm:     repositories.NewVAGormRepository(db.PgDB),
-		UserVASync: *repositories.NewSyncRepository(db.DB),
-		DataProviderCfg: repositories.NewDataProviderConfigRepo(db.PgDB),
-		VASyncHistory:   repositories.NewVASyncHistoryRepo(db.PgDB),
-		PilotATSynced:   repositories.NewPilotATSyncedRepo(db.PgDB),
-		RouteATSynced:   repositories.NewRouteATSyncedRepo(db.PgDB),
-		PirepATSynced:   repositories.NewPirepATSyncedRepo(db.PgDB),
-		AircraftLivery:  repositories.NewAircraftLiveryRepository(db.PgDB),
+		User:                  *repositories.NewUserRepository(db.DB),
+		UserGorm:              repositories.NewUserRepositoryGORM(db.PgDB),
+		Keys:                  *repositories.NewApiKeysRepo(db.DB),
+		Va:                    *repositories.NewVARepository(db.DB),
+		VAGorm:                repositories.NewVAGormRepository(db.PgDB),
+		UserVASync:            *repositories.NewSyncRepository(db.DB),
+		DataProviderCfg:       repositories.NewDataProviderConfigRepo(db.PgDB),
+		VASyncHistory:         repositories.NewVASyncHistoryRepo(db.PgDB),
+		PilotATSynced:         repositories.NewPilotATSyncedRepo(db.PgDB),
+		RouteATSynced:         repositories.NewRouteATSyncedRepo(db.PgDB),
+		PirepATSynced:         repositories.NewPirepATSyncedRepo(db.PgDB),
+		AircraftLivery:        repositories.NewAircraftLiveryRepository(db.PgDB),
 		LiveryAirtableMapping: repositories.NewLiveryAirtableMappingRepository(db.PgDB),
 	}
 
@@ -109,13 +110,21 @@ func InitDependencies() (*Dependencies, error) {
 	userSvc := services.NewUserService(&repositories.User, repositories.UserGorm, pilotStatsSvc)
 
 	// Initialize data provider config service
-	dataProviderConfigSvc := services.NewDataProviderConfigService(repositories.DataProviderCfg)
+	dataProviderConfigSvc := services.NewDataProviderConfigService(repositories.DataProviderCfg, cacheSvc)
+	if dataProviderConfigSvc == nil {
+		log.Println("WARNING: DataProviderConfigService is nil after initialization!")
+	} else {
+		log.Println("DataProviderConfigService initialized successfully")
+	}
 
 	// Initialize V2 registration service with GORM and LiveAPIProvider
 	regServiceV2 := services.NewRegistrationServiceV2(db.PgDB, liveAPIProvider)
 
 	// Initialize aircraft livery service
 	aircraftLiverySvc := common.NewAircraftLiveryService(legacyCache, repositories.AircraftLivery)
+
+	// Initialize Airtable provider
+	airtableProvider := providers.NewAirtableProvider(cacheSvc)
 
 	svc := &Services{
 		User:               userSvc,
@@ -124,6 +133,7 @@ func InitDependencies() (*Dependencies, error) {
 		Conf:               *confSvc,
 		VaMgmt:             *services.NewVAManagementService(repositories.Va, repositories.User),
 		AirtableApi:        *common.NewAirtableApiService(confSvc),
+		AirtableProvider:   airtableProvider,
 		AirtableSync:       *services.NewAtSyncService(legacyCache, &repositories.UserVASync),
 		Flights:            *services.NewFlightsService(legacyCache, liveSvc, confSvc, aircraftLiverySvc),
 		PilotStats:         pilotStatsSvc,

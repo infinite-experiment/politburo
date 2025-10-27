@@ -8,7 +8,6 @@ import (
 	"infinite-experiment/politburo/internal/api"
 	"infinite-experiment/politburo/internal/db"
 	"infinite-experiment/politburo/internal/jobs"
-	"infinite-experiment/politburo/internal/middleware"
 	"infinite-experiment/politburo/internal/workers"
 
 	"github.com/go-chi/chi/v5"
@@ -53,11 +52,10 @@ func RegisterRoutes(upSince time.Time) http.Handler {
 	syncSvc := &deps.Services.AirtableSync
 	flightSvc := &deps.Services.Flights
 
-	r.Get("/public/flight", api.UserFlightMapHandler(legacyCacheSvc))
-	r.Get("/public/flight/user", api.UserFlightsCacheHandler(legacyCacheSvc))
+	// Register UI routes (separate from API)
+	RegisterUIRoutes(r)
 
-	// Setup workers
-
+	// Setup workers and jobs first
 	// Setup scheduled jobs (both pilot and route sync run every hour)
 	jobsContainer := jobs.InitializeJobs(
 		context.Background(),
@@ -86,72 +84,9 @@ func RegisterRoutes(upSince time.Time) http.Handler {
 
 	// Initialize jobs handler for manual triggering
 	jobsHandler := api.NewJobsHandler(jobsContainer.PilotSync)
-	// API v1 routes
-	r.Route("/api/v1", func(v1 chi.Router) {
-		v1.Use(middleware.AuthMiddleware(userRepoGorm, keyRepo)) // global: all routes must be authenticated (using GORM)
-		v1.Get("/user/details", handlers.GetUserDetails())       // MIGRATED to DI
-		v1.Get("/admin/verify-god", handlers.VerifyGodMode())    // God mode verification
 
-		// Registered users group
-		v1.Group(func(registered chi.Router) {
-			// God-only group (admin + staff + member + registered)
-			registered.Group(func(god chi.Router) {
-				god.Use(middleware.IsGodMiddleware())
-				god.Delete("/users/delete", handlers.DeleteAllUsers()) // MIGRATED to DI
-			})
-			registered.Use(middleware.IsRegisteredMiddleware())
-
-			registered.Post("/server/init", handlers.InitServerRegistrationV2()) // V2: Uses GORM
-
-			// Member-only group (requires registered first)
-			registered.Group(func(member chi.Router) {
-				member.Use(middleware.IsMemberMiddleware())
-
-				// Pilot stats endpoint - comprehensive stats including game stats (future) and provider data
-				member.Get("/pilot/stats", handlers.GetPilotStats())
-
-				// PIREP filing endpoints
-				member.Get("/pireps/config", handlers.GetPirepConfig())
-				member.Post("/pireps/submit", handlers.SubmitPirep())
-
-				member.Get("/va/live", api.VaFlightsHandler(flightSvc))
-				member.Get("/live/sessions", api.LiveServers(flightSvc))
-
-				// Staff-only group (requires member + registered)
-				member.Group(func(staff chi.Router) {
-					staff.Use(middleware.IsStaffMiddleware())
-					staff.Get("/user/{user_id}/flights", api.UserFlightsHandler(flightSvc, cfgSvc))
-					staff.Post("/va/userSync", api.SyncUser(vaMgmtSvc))
-
-					// Admin-only group (staff + member + registered)
-					staff.Group(func(admin chi.Router) {
-						admin.Use(middleware.IsAdminMiddleware())
-
-						admin.Post("/va/setRole", api.SetRole(vaMgmtSvc))
-						admin.Post("/va/configs", api.SetConfigKeys(cfgSvc))
-						admin.Get("/va/configs", api.GetVAConfigs(cfgSvc))
-						admin.Get("/va/configs/keys", api.ListConfigKeys(cfgSvc))
-						admin.Get("/debug", api.DebugHandler(*atApiSvc, *syncSvc))
-
-						// Data provider configuration management
-						admin.Post("/admin/data-provider/config", api.SaveDataProviderConfigHandler(deps))
-
-						// Flight mode configuration management
-						admin.Post("/va/flight-modes/config", handlers.SetFlightModesConfig())
-
-						// Background jobs management
-						admin.Post("/admin/jobs/sync-pilots", jobsHandler.TriggerPilotSync())
-						admin.Get("/admin/jobs/status", jobsHandler.GetJobStatus())
-
-					})
-				})
-			})
-		})
-
-		// Public
-		v1.Post("/user/register/init", handlers.InitUserRegistrationV2()) // V2: Uses GORM + LiveAPIProvider
-		v1.Post("/user/register/link", handlers.LinkUserToVA())           // Link existing user to VA
-	})
+	// Register API routes (after jobsHandler is initialized)
+	RegisterAPIRoutes(r, userRepoGorm, keyRepo, handlers, legacyCacheSvc, cfgSvc, vaMgmtSvc, atApiSvc, syncSvc, flightSvc, jobsHandler, deps)
 
 	return r
 }

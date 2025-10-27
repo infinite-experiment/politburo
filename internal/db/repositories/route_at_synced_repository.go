@@ -78,3 +78,21 @@ func (r *RouteATSyncedRepo) CountByVA(ctx context.Context, vaID string) (int64, 
 
 	return count, err
 }
+
+// FindByName finds a route by VA ID and route name (case-insensitive)
+func (r *RouteATSyncedRepo) FindByName(ctx context.Context, vaID string, routeName string) (*gorm.RouteATSynced, error) {
+	var route gorm.RouteATSynced
+
+	err := r.db.WithContext(ctx).
+		Where("server_id = ? AND LOWER(route) = LOWER(?)", vaID, routeName).
+		First(&route).Error
+
+	if err != nil {
+		if err == gormlib.ErrRecordNotFound {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	return &route, nil
+}

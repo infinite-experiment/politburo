@@ -101,45 +101,29 @@ func (h *Handlers) GetPirepConfig() http.HandlerFunc {
 			Route:       "",
 		}
 
-		// Filter for user's current flight by matching flight number
-		if vaFlights != nil && userCallsign != "" {
-			flightFound := false
-			for _, lf := range *vaFlights {
-				// Extract the components from the live flight
-				lfVar, lfPrefix, lfSuffix := services.SplitCallsign(lf.Callsign)
+		// Find the user's current flight using unified method
+		currentFlight, err := h.deps.Services.Flights.FindUserCurrentFlight(
+			r.Context(),
+			vaGorm.ID,
+			userCallsign,
+			prefix,
+			suffix,
+		)
+		if err != nil {
+			log.Printf("[GetPirepConfig] No matching flight found: %v", err)
+			common.RespondError(w, initTime, fmt.Errorf("no live flight found"), "You are not currently flying. Please join a flight before filing a PIREP.", http.StatusNotFound)
+			return
+		}
 
-				// Check if this flight matches the user's flight number
-				// Match if:
-				// 1. Full pattern matches (prefix+number+suffix)
-				// 2. Just the flight number matches in the variable part
-				matchesFullPattern := (lfPrefix == prefix) && (lfVar == userCallsign) && (lfSuffix == suffix)
-				matchesNumber := lfVar == userCallsign || lfVar == (prefix + userCallsign + suffix)
-
-				log.Printf("[GetPirepConfig] Checking flight: callsign=%s (prefix=%s, var=%s, suffix=%s) - fullPattern=%v, matchesNumber=%v",
-					lf.Callsign, lfPrefix, lfVar, lfSuffix, matchesFullPattern, matchesNumber)
-
-				if matchesFullPattern || matchesNumber {
-					log.Printf("[GetPirepConfig] Found matching flight! Callsign=%s, Aircraft=%s, Livery=%s, Route=%s-%s",
-						lf.Callsign, lf.Aircraft, lf.Livery, lf.Origin, lf.Destination)
-					flight.Callsign = lf.Callsign
-					flight.Aircraft = lf.Aircraft
-					flight.Livery = lf.Livery
-					flight.LiveryID = lf.LiveryId
-					flight.Route = fmt.Sprintf("%s-%s", lf.Origin, lf.Destination)
-					flightFound = true
-					break
-				}
-			}
-			if !flightFound {
-				log.Printf("[GetPirepConfig] No matching flight found for user callsign: %s (pattern: %s)", userCallsign, expectedCallsignPattern)
-			}
-		} else {
-			if vaFlights == nil {
-				log.Printf("[GetPirepConfig] VA flights is nil")
-			}
-			if userCallsign == "" {
-				log.Printf("[GetPirepConfig] User callsign is empty")
-			}
+		// Map the found flight to FlightData
+		if currentFlight != nil {
+			flight.Callsign = currentFlight.Callsign
+			flight.Aircraft = currentFlight.Aircraft
+			flight.Livery = currentFlight.Livery
+			flight.LiveryID = currentFlight.LiveryId
+			flight.Route = fmt.Sprintf("%s-%s", currentFlight.Origin, currentFlight.Destination)
+			flight.Altitude = currentFlight.AltitudeFt
+			flight.Speed = currentFlight.SpeedKts
 		}
 
 		// Build simplified response (without route details)
@@ -161,6 +145,26 @@ func (h *Handlers) SubmitPirep() http.HandlerFunc {
 			return
 		}
 
+		vaDiscordServerID := claims.DiscordServerID()
+
+		// Validate VA exists
+		if vaDiscordServerID == "" {
+			common.RespondError(w, initTime, fmt.Errorf("va not found"), "Virtual airline not found", http.StatusNotFound)
+			return
+		}
+
+		// Get VA configuration
+		va, err := h.deps.Repo.VAGorm.GetByDiscordServerID(r.Context(), vaDiscordServerID)
+		if err != nil {
+			common.RespondError(w, initTime, err, "Failed to fetch VA configuration", http.StatusInternalServerError)
+			return
+		}
+
+		if va == nil {
+			common.RespondError(w, initTime, fmt.Errorf("va not found"), "Virtual airline not found", http.StatusNotFound)
+			return
+		}
+
 		// Parse request body
 		var submitRequest dtos.PirepSubmitRequest
 		if err := json.NewDecoder(r.Body).Decode(&submitRequest); err != nil {
@@ -168,18 +172,60 @@ func (h *Handlers) SubmitPirep() http.HandlerFunc {
 			return
 		}
 
-		// Create submission service
-		submissionService := services.NewPirepSubmissionService()
+		// Get user and their current flight for livery mapping
+		discordID := claims.DiscordUserID()
+		user, err := h.deps.Repo.UserGorm.GetUserWithVAAffiliations(r.Context(), discordID)
+		if err != nil || user == nil {
+			common.RespondError(w, initTime, fmt.Errorf("user not found"), "User not found", http.StatusNotFound)
+			return
+		}
 
-		// Submit PIREP (for now just logs the request)
-		response, err := submissionService.SubmitPirep(r.Context(), &submitRequest)
+		// Get user's callsign for this VA
+		userCallsign := ""
+		for _, role := range user.UserVARoles {
+			if role.VAID == va.ID {
+				userCallsign = role.Callsign
+				break
+			}
+		}
+
+		if userCallsign == "" {
+			common.RespondError(w, initTime, fmt.Errorf("user not member of va"), "User is not a member of this virtual airline", http.StatusForbidden)
+			return
+		}
+
+		// Create submission service with all dependencies
+		// Note: Service handles ALL flight data fetching internally (flight matching, livery resolution, aircraft/airline mapping)
+		validator := services.NewFlightModeValidationService(&h.deps.Services.Live, h.deps.Services.Cache)
+		submissionService := services.NewPirepSubmissionService(
+			h.deps.Repo.UserGorm,
+			h.deps.Repo.PilotATSynced,
+			h.deps.Repo.RouteATSynced,
+			h.deps.Repo.LiveryAirtableMapping,
+			h.deps.Repo.DataProviderCfg,
+			h.deps.Services.AirtableProvider,
+			validator,
+			h.deps.Services.Cache,
+			&h.deps.Services.Flights,
+			&h.deps.Services.Conf,
+			h.deps.Services.DataProviderConfig,
+		)
+
+		// Submit PIREP (service handles all flight data fetching internally)
+		response, err := submissionService.SubmitPirep(r.Context(), &submitRequest, va, claims)
 		if err != nil {
 			common.RespondError(w, initTime, err, "Failed to submit PIREP", http.StatusInternalServerError)
 			return
 		}
 
-		// Return success response
-		common.RespondSuccess(w, initTime, "PIREP submitted successfully", response)
+		// Return response (success or validation error)
+		if response.Success {
+			common.RespondSuccess(w, initTime, response.Message, response)
+		} else {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(response)
+		}
 	}
 }
 
@@ -415,6 +461,8 @@ func (h *Handlers) buildSimplePirepConfigResponse(
 			CurrentLivery:       flight.Livery,
 			CurrentRoute:        flight.Route,
 			CurrentFlightStatus: "in_flight",
+			CurrentAltitude:     flight.Altitude,
+			CurrentSpeed:        flight.Speed,
 		},
 		AvailableModes: []dtos.SimpleModeResponse{},
 	}

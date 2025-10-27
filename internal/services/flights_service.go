@@ -531,3 +531,48 @@ func (svc *FlightsService) GetLiveServers() (*[]dtos.Session, error) {
 
 	return sessions, nil
 }
+
+// FindUserCurrentFlight searches for the user's current flight in VA live flights
+// Uses the callsign prefix, suffix, and user callsign to match against live flights
+// Returns the matching LiveFlight or nil if not found
+func (svc *FlightsService) FindUserCurrentFlight(
+	ctx context.Context,
+	vaID string,
+	userCallsign string,
+	callsignPrefix string,
+	callsignSuffix string,
+) (*dtos.LiveFlight, error) {
+	// Get VA live flights
+	vaFlights, err := svc.GetVALiveFlights(ctx, vaID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch VA live flights: %w", err)
+	}
+
+	if vaFlights == nil || len(*vaFlights) == 0 {
+		return nil, fmt.Errorf("no live flights found")
+	}
+
+	// Search for matching flight
+	for _, lf := range *vaFlights {
+		// Extract the components from the live flight
+		lfVar, lfPrefix, lfSuffix := SplitCallsign(lf.Callsign)
+
+		// Check if this flight matches the user's flight number
+		// Match if:
+		// 1. Full pattern matches (prefix+number+suffix)
+		// 2. Just the flight number matches in the variable part
+		matchesFullPattern := (lfPrefix == callsignPrefix) && (lfVar == userCallsign) && (lfSuffix == callsignSuffix)
+		matchesNumber := lfVar == userCallsign || lfVar == (callsignPrefix+userCallsign+callsignSuffix)
+
+		log.Printf("[FindUserCurrentFlight] Checking flight: callsign=%s (prefix=%s, var=%s, suffix=%s) - fullPattern=%v, matchesNumber=%v",
+			lf.Callsign, lfPrefix, lfVar, lfSuffix, matchesFullPattern, matchesNumber)
+
+		if matchesFullPattern || matchesNumber {
+			log.Printf("[FindUserCurrentFlight] Found matching flight! Callsign=%s, Aircraft=%s, Livery=%s, Route=%s-%s, Alt=%dft, Speed=%dkts",
+				lf.Callsign, lf.Aircraft, lf.Livery, lf.Origin, lf.Destination, lf.AltitudeFt, lf.SpeedKts)
+			return &lf, nil
+		}
+	}
+
+	return nil, fmt.Errorf("current flight not found for callsign: %s", userCallsign)
+}

@@ -36,6 +36,10 @@ type FieldMapping struct {
 	DisplayName   string  `json:"display_name,omitempty"`    // Standardized field name: "flight_hours", "rank", etc.
 	IsUserVisible bool    `json:"is_user_visible"`           // Show in user-facing APIs like /api/v1/pilot/stats
 	DisplayFormat *string `json:"display_format,omitempty"`  // Optional formatting hint: "duration", "date", etc.
+
+	// Bot metadata enrichment - only ONE field should have this set to true
+	// When true, bot-generated metadata (flight stats, aircraft, livery, etc.) will be appended to this field
+	BotMetadata bool `json:"bot_metadata"`
 }
 
 // SyncSettings defines sync behavior preferences

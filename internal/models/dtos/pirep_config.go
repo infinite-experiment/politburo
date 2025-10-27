@@ -43,6 +43,9 @@ type UserInfo struct {
 	CurrentLivery        string `json:"current_livery"`
 	CurrentRoute         string `json:"current_route"`
 	CurrentFlightStatus  string `json:"current_flight_status"`
+	CurrentAltitude      int    `json:"current_altitude,omitempty"` // Altitude in feet at time of request
+	CurrentSpeed         int    `json:"current_speed,omitempty"`    // Speed in knots at time of request
+	Multiplier           float64 `json:"multiplier,omitempty"`       // Mode multiplier for reference
 }
 
 // RouteOption represents a selectable route option

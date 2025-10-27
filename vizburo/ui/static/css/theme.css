@@ -1,0 +1,727 @@
+/* Theme CSS Variables for Light, Dark, and High Contrast themes */
+
+:root[data-theme="light"] {
+  --color-bg-primary: #ffffff;
+  --color-bg-secondary: #f3f4f6;
+  --color-text-primary: #1f2937;
+  --color-text-secondary: #6b7280;
+  --color-accent: #0f766e;
+  --color-accent-light: #14b8a6;
+  --color-border: #e5e7eb;
+  --color-shadow: rgba(0, 0, 0, 0.1);
+}
+
+:root[data-theme="dark"] {
+  --color-bg-primary: #1f2937;
+  --color-bg-secondary: #111827;
+  --color-text-primary: #f3f4f6;
+  --color-text-secondary: #d1d5db;
+  --color-accent: #14b8a6;
+  --color-accent-light: #2dd4bf;
+  --color-border: #374151;
+  --color-shadow: rgba(0, 0, 0, 0.3);
+}
+
+:root[data-theme="high-contrast"] {
+  --color-bg-primary: #000000;
+  --color-bg-secondary: #1a1a1a;
+  --color-text-primary: #ffffff;
+  --color-text-secondary: #ffffff;
+  --color-accent: #ffff00;
+  --color-accent-light: #ffff00;
+  --color-border: #ffffff;
+  --color-shadow: rgba(255, 255, 255, 0.2);
+}
+
+:root[data-theme="obsidian"] {
+  --color-bg-primary: #1e1e1e;
+  --color-bg-secondary: #2d2d30;
+  --color-text-primary: #d4d4d4;
+  --color-text-secondary: #a0a0a0;
+  --color-accent: #9b8ac3;
+  --color-accent-light: #b5a4d4;
+  --color-border: #404040;
+  --color-shadow: rgba(0, 0, 0, 0.5);
+}
+
+/* Apply theme colors and font to common elements */
+body {
+  background-color: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-size: 0.95rem;
+  line-height: 1.6;
+  letter-spacing: 0.3px;
+}
+
+a {
+  color: var(--color-accent);
+}
+
+a:hover {
+  color: var(--color-accent-light);
+}
+
+/* Ensure smooth transitions when switching themes */
+* {
+  transition: background-color 0.2s, color 0.2s, border-color 0.2s;
+}
+
+/* Obsidian Theme Component Styling */
+:root[data-theme="obsidian"] {
+  /* Spacing */
+  --spacing-xs: 0.25rem;
+  --spacing-sm: 0.5rem;
+  --spacing-md: 0.75rem;
+  --spacing-lg: 1rem;
+  --spacing-xl: 1.5rem;
+  --spacing-2xl: 2rem;
+
+  /* Border Radius */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+
+  /* Button Sizes */
+  --btn-small-padding: 0.375rem 0.75rem;
+  --btn-small-height: 1.875rem;
+  --btn-small-font: 0.8125rem;
+
+  --btn-medium-padding: 0.5rem 1rem;
+  --btn-medium-height: 2.25rem;
+  --btn-medium-font: 0.95rem;
+
+  --btn-large-padding: 0.75rem 1.5rem;
+  --btn-large-height: 2.75rem;
+  --btn-large-font: 1.0625rem;
+
+  /* Button Border */
+  --btn-border-width: 2px;
+  --btn-border-radius: 6px;
+
+  /* Primary Button */
+  --btn-primary-bg: #9b8ac3;
+  --btn-primary-bg-hover: #b5a4d4;
+  --btn-primary-bg-active: #8b7ab3;
+  --btn-primary-text: #ffffff;
+  --btn-primary-shadow: rgba(155, 138, 195, 0.2);
+
+  /* Secondary Button */
+  --btn-secondary-border: #404040;
+  --btn-secondary-text: #d4d4d4;
+  --btn-secondary-bg-hover: #2d2d30;
+  --btn-secondary-text-hover: #b5a4d4;
+
+  /* Danger Button */
+  --btn-danger-border: #dc2626;
+  --btn-danger-text: #dc2626;
+  --btn-danger-bg-hover: #dc2626;
+  --btn-danger-text-hover: #ffffff;
+
+  /* Row/List Item */
+  --list-item-height: 2.5rem;
+  --list-item-padding: 0.75rem 1rem;
+
+  /* Form Elements Spacing */
+  --form-group-margin: 1.25rem;
+  --form-input-margin: 0.5rem;
+
+  /* Focus/Hover Effects */
+  --focus-ring: 2px solid #b5a4d4;
+  --focus-offset: 2px;
+}
+
+/* Obsidian Button Base Styles */
+:root[data-theme="obsidian"] button:not(.theme-btn) {
+  font-weight: 500;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-right: var(--spacing-md);
+  margin-bottom: var(--spacing-md);
+  letter-spacing: 0.3px;
+  border-radius: var(--btn-border-radius);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+:root[data-theme="obsidian"] button:not(.theme-btn):last-child {
+  margin-right: 0;
+}
+
+:root[data-theme="obsidian"] button:not(.theme-btn):focus {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
+
+/* Primary Button Variant */
+:root[data-theme="obsidian"] button.btn-primary,
+:root[data-theme="obsidian"] button:not(.btn-secondary):not(.btn-neutral):not(.btn-danger):not(.theme-btn) {
+  padding: var(--btn-medium-padding);
+  min-height: var(--btn-medium-height);
+  font-size: var(--btn-medium-font);
+  background-color: var(--btn-primary-bg);
+  color: var(--btn-primary-text);
+}
+
+:root[data-theme="obsidian"] button.btn-primary:hover,
+:root[data-theme="obsidian"] button:not(.btn-secondary):not(.btn-neutral):not(.btn-danger):not(.theme-btn):hover {
+  background-color: var(--btn-primary-bg-hover);
+  box-shadow: 0 4px 12px var(--btn-primary-shadow);
+  transform: translateY(-2px);
+}
+
+:root[data-theme="obsidian"] button.btn-primary:active,
+:root[data-theme="obsidian"] button:not(.btn-secondary):not(.btn-neutral):not(.btn-danger):not(.theme-btn):active {
+  background-color: var(--btn-primary-bg-active);
+  transform: translateY(0);
+  box-shadow: 0 2px 4px var(--btn-primary-shadow);
+}
+
+:root[data-theme="obsidian"] button.btn-primary:disabled,
+:root[data-theme="obsidian"] button:not(.btn-secondary):not(.btn-neutral):not(.btn-danger):not(.theme-btn):disabled {
+  background-color: #404040;
+  color: #808080;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+/* Secondary Button Variant */
+:root[data-theme="obsidian"] button.btn-secondary {
+  padding: var(--btn-medium-padding);
+  min-height: var(--btn-medium-height);
+  font-size: var(--btn-medium-font);
+  background-color: transparent;
+  border: var(--btn-border-width) solid var(--btn-secondary-border);
+  color: var(--btn-secondary-text);
+}
+
+:root[data-theme="obsidian"] button.btn-secondary:hover {
+  background-color: var(--btn-secondary-bg-hover);
+  border-color: var(--btn-secondary-text-hover);
+  color: var(--btn-secondary-text-hover);
+  box-shadow: 0 2px 8px rgba(155, 138, 195, 0.15);
+}
+
+:root[data-theme="obsidian"] button.btn-secondary:active {
+  background-color: #1a1a1a;
+  transform: translateY(0);
+}
+
+:root[data-theme="obsidian"] button.btn-secondary:disabled {
+  border-color: #505050;
+  color: #808080;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+/* Neutral Button Variant */
+:root[data-theme="obsidian"] button.btn-neutral {
+  padding: var(--btn-medium-padding);
+  min-height: var(--btn-medium-height);
+  font-size: var(--btn-medium-font);
+  background-color: #2d2d30;
+  border: var(--btn-border-width) solid #404040;
+  color: var(--btn-secondary-text);
+}
+
+:root[data-theme="obsidian"] button.btn-neutral:hover {
+  background-color: #3a3a3f;
+  border-color: #505050;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+:root[data-theme="obsidian"] button.btn-neutral:active {
+  background-color: #242429;
+  transform: translateY(0);
+}
+
+/* Danger Button Variant */
+:root[data-theme="obsidian"] button.btn-danger {
+  padding: var(--btn-medium-padding);
+  min-height: var(--btn-medium-height);
+  font-size: var(--btn-medium-font);
+  background-color: transparent;
+  border: var(--btn-border-width) solid var(--btn-danger-border);
+  color: var(--btn-danger-text);
+}
+
+:root[data-theme="obsidian"] button.btn-danger:hover {
+  background-color: var(--btn-danger-bg-hover);
+  color: var(--btn-danger-text-hover);
+  box-shadow: 0 4px 12px rgba(220, 38, 38, 0.2);
+}
+
+:root[data-theme="obsidian"] button.btn-danger:active {
+  background-color: #b91c1c;
+  transform: translateY(0);
+}
+
+/* Button Sizes */
+:root[data-theme="obsidian"] button.btn-small {
+  padding: var(--btn-small-padding);
+  min-height: var(--btn-small-height);
+  font-size: var(--btn-small-font);
+}
+
+:root[data-theme="obsidian"] button.btn-large {
+  padding: var(--btn-large-padding);
+  min-height: var(--btn-large-height);
+  font-size: var(--btn-large-font);
+}
+
+/* Obsidian List/Row Items */
+:root[data-theme="obsidian"] li,
+:root[data-theme="obsidian"] .list-item,
+:root[data-theme="obsidian"] .row {
+  min-height: var(--list-item-height);
+  padding: var(--list-item-padding);
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+}
+
+:root[data-theme="obsidian"] li:hover,
+:root[data-theme="obsidian"] .list-item:hover,
+:root[data-theme="obsidian"] .row:hover {
+  background-color: var(--color-bg-secondary);
+}
+
+/* Obsidian Input Fields */
+:root[data-theme="obsidian"] input,
+:root[data-theme="obsidian"] textarea,
+:root[data-theme="obsidian"] select {
+  padding: var(--spacing-md) var(--spacing-lg);
+  margin: var(--form-input-margin) 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background-color: var(--color-bg-secondary);
+  color: var(--color-text-primary);
+  font-size: 0.875rem;
+  line-height: 1.5;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  font-family: inherit;
+}
+
+:root[data-theme="obsidian"] input::placeholder,
+:root[data-theme="obsidian"] textarea::placeholder {
+  color: #808080;
+}
+
+:root[data-theme="obsidian"] input:focus,
+:root[data-theme="obsidian"] textarea:focus,
+:root[data-theme="obsidian"] select:focus {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+  border-color: #b5a4d4;
+  box-shadow: 0 0 0 3px rgba(181, 164, 212, 0.1);
+}
+
+/* Form Groups */
+:root[data-theme="obsidian"] .form-group,
+:root[data-theme="obsidian"] .field-group {
+  margin-bottom: var(--form-group-margin);
+  display: flex;
+  flex-direction: column;
+}
+
+:root[data-theme="obsidian"] label {
+  margin-bottom: var(--spacing-sm);
+  color: var(--color-text-primary);
+  font-weight: 500;
+  font-size: 0.875rem;
+}
+
+/* Obsidian Cards */
+:root[data-theme="obsidian"] .card,
+:root[data-theme="obsidian"] [class*="card"] {
+  background-color: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-xl);
+  transition: all 0.2s ease;
+}
+
+:root[data-theme="obsidian"] .card:hover {
+  border-color: #505050;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+}
+
+/* Card Variants */
+:root[data-theme="obsidian"] .card.card-featured {
+  border-left: 4px solid #9b8ac3;
+  background: linear-gradient(135deg, rgba(155, 138, 195, 0.05) 0%, transparent 100%);
+}
+
+:root[data-theme="obsidian"] .card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--spacing-lg);
+  padding-bottom: var(--spacing-lg);
+  border-bottom: 1px solid var(--color-border);
+}
+
+:root[data-theme="obsidian"] .card-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin: 0;
+}
+
+:root[data-theme="obsidian"] .card-body {
+  margin-bottom: var(--spacing-lg);
+}
+
+:root[data-theme="obsidian"] .card-footer {
+  display: flex;
+  gap: var(--spacing-md);
+  padding-top: var(--spacing-lg);
+  border-top: 1px solid var(--color-border);
+}
+
+/* Obsidian Badge/Chip */
+:root[data-theme="obsidian"] .badge,
+:root[data-theme="obsidian"] .chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.375rem 0.75rem;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  background-color: rgba(155, 138, 195, 0.15);
+  color: #b5a4d4;
+  border: 1px solid rgba(155, 138, 195, 0.3);
+  transition: all 0.2s ease;
+}
+
+:root[data-theme="obsidian"] .badge:hover,
+:root[data-theme="obsidian"] .chip:hover {
+  background-color: rgba(155, 138, 195, 0.25);
+  border-color: rgba(155, 138, 195, 0.5);
+}
+
+/* Badge Variants */
+:root[data-theme="obsidian"] .badge-primary {
+  background-color: rgba(155, 138, 195, 0.15);
+  color: #b5a4d4;
+  border-color: rgba(155, 138, 195, 0.3);
+}
+
+:root[data-theme="obsidian"] .badge-success {
+  background-color: rgba(16, 185, 129, 0.15);
+  color: #6ee7b7;
+  border-color: rgba(16, 185, 129, 0.3);
+}
+
+:root[data-theme="obsidian"] .badge-error {
+  background-color: rgba(220, 38, 38, 0.15);
+  color: #f87171;
+  border-color: rgba(220, 38, 38, 0.3);
+}
+
+:root[data-theme="obsidian"] .badge-warning {
+  background-color: rgba(245, 158, 11, 0.15);
+  color: #fbbf24;
+  border-color: rgba(245, 158, 11, 0.3);
+}
+
+:root[data-theme="obsidian"] .badge-default {
+  background-color: rgba(64, 64, 64, 0.3);
+  color: #a0a0a0;
+  border-color: rgba(64, 64, 64, 0.5);
+}
+
+/* Chip Close Button */
+:root[data-theme="obsidian"] .chip .chip-close {
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  padding: 0;
+  margin: 0 -0.25rem 0 0.25rem;
+  font-size: 1.125rem;
+  line-height: 1;
+  transition: opacity 0.2s ease;
+}
+
+:root[data-theme="obsidian"] .chip .chip-close:hover {
+  opacity: 0.7;
+}
+
+/* Obsidian Table/Grid */
+:root[data-theme="obsidian"] table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+:root[data-theme="obsidian"] th {
+  padding: var(--spacing-lg);
+  background-color: var(--color-bg-secondary);
+  border-bottom: 2px solid var(--color-border);
+  text-align: left;
+  font-weight: 600;
+  font-size: 0.875rem;
+  color: var(--color-text-primary);
+}
+
+:root[data-theme="obsidian"] td {
+  padding: var(--list-item-padding);
+  border-bottom: 1px solid var(--color-border);
+}
+
+:root[data-theme="obsidian"] tr:hover {
+  background-color: var(--color-bg-secondary);
+}
+
+/* Obsidian Tab Styling */
+:root[data-theme="obsidian"] [role="tab"],
+:root[data-theme="obsidian"] .tab-button,
+:root[data-theme="obsidian"] [data-tab] {
+  padding: 0.875rem 1.5rem;
+  margin-right: 0.75rem;
+  margin-bottom: 1rem;
+  font-weight: 500;
+  font-size: 0.95rem;
+  color: var(--color-text-secondary);
+  border-bottom: 3px solid transparent;
+  background: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  letter-spacing: 0.3px;
+  position: relative;
+}
+
+:root[data-theme="obsidian"] [role="tab"]:hover,
+:root[data-theme="obsidian"] .tab-button:hover,
+:root[data-theme="obsidian"] [data-tab]:hover {
+  color: var(--color-accent);
+  border-bottom-color: var(--color-accent);
+}
+
+:root[data-theme="obsidian"] [role="tab"][aria-selected="true"],
+:root[data-theme="obsidian"] .tab-button.active,
+:root[data-theme="obsidian"] [data-tab].active {
+  color: var(--color-accent);
+  border-bottom-color: var(--color-accent);
+  font-weight: 600;
+}
+
+/* Obsidian General Spacing Improvements */
+:root[data-theme="obsidian"] section {
+  margin-bottom: 2rem;
+}
+
+:root[data-theme="obsidian"] .section-title {
+  margin-bottom: 1.5rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+:root[data-theme="obsidian"] h2,
+:root[data-theme="obsidian"] h3,
+:root[data-theme="obsidian"] h4 {
+  margin-bottom: 1rem;
+  font-weight: 600;
+  letter-spacing: -0.5px;
+}
+
+:root[data-theme="obsidian"] p {
+  margin-bottom: 1rem;
+  line-height: 1.6;
+}
+
+:root[data-theme="obsidian"] ul,
+:root[data-theme="obsidian"] ol {
+  margin: 1rem 0;
+  padding-left: 1.5rem;
+}
+
+:root[data-theme="obsidian"] li {
+  margin-bottom: 0.75rem;
+  line-height: 1.6;
+}
+
+/* Obsidian Modal Styles */
+:root[data-theme="obsidian"] .modal {
+  position: fixed;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: modalFadeIn 0.2s ease;
+}
+
+:root[data-theme="obsidian"] .modal.modal-open {
+  display: flex;
+}
+
+@keyframes modalFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Modal Backdrop */
+:root[data-theme="obsidian"] .modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.7);
+  z-index: -1;
+  transition: opacity 0.2s ease;
+}
+
+/* Modal Content */
+:root[data-theme="obsidian"] .modal-content,
+:root[data-theme="obsidian"] .modal-dialog {
+  background-color: var(--color-bg-primary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  max-width: 90%;
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  animation: modalSlideIn 0.3s ease;
+  z-index: 1001;
+}
+
+@keyframes modalSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Modal Sizes */
+:root[data-theme="obsidian"] .modal-content.modal-sm {
+  max-width: 400px;
+}
+
+:root[data-theme="obsidian"] .modal-content.modal-md {
+  max-width: 600px;
+}
+
+:root[data-theme="obsidian"] .modal-content.modal-lg {
+  max-width: 800px;
+}
+
+:root[data-theme="obsidian"] .modal-content.modal-xl {
+  max-width: 1000px;
+}
+
+/* Modal Header */
+:root[data-theme="obsidian"] .modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--spacing-xl);
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+
+:root[data-theme="obsidian"] .modal-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin: 0;
+}
+
+:root[data-theme="obsidian"] .modal-close {
+  background: none;
+  border: none;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  font-size: 1.5rem;
+  line-height: 1;
+  padding: 0;
+  transition: color 0.2s ease;
+}
+
+:root[data-theme="obsidian"] .modal-close:hover {
+  color: var(--color-text-primary);
+}
+
+/* Modal Body */
+:root[data-theme="obsidian"] .modal-body {
+  padding: var(--spacing-xl);
+  flex-grow: 1;
+  overflow-y: auto;
+}
+
+/* Modal Footer */
+:root[data-theme="obsidian"] .modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--spacing-md);
+  padding: var(--spacing-xl);
+  border-top: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+
+/* Alert Styles */
+:root[data-theme="obsidian"] .alert {
+  display: flex;
+  gap: var(--spacing-md);
+  padding: var(--spacing-lg);
+  border-radius: var(--radius-md);
+  border-left: 4px solid;
+  background-color: var(--color-bg-secondary);
+  transition: all 0.2s ease;
+}
+
+:root[data-theme="obsidian"] .alert-icon {
+  flex-shrink: 0;
+  font-size: 1.25rem;
+}
+
+:root[data-theme="obsidian"] .alert-content {
+  flex-grow: 1;
+}
+
+:root[data-theme="obsidian"] .alert-close {
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  padding: 0;
+  margin-left: var(--spacing-md);
+  transition: opacity 0.2s ease;
+}
+
+:root[data-theme="obsidian"] .alert-close:hover {
+  opacity: 0.7;
+}
+
+/* Alert Variants */
+:root[data-theme="obsidian"] .alert-info {
+  border-left-color: #3b82f6;
+  color: #93c5fd;
+}
+
+:root[data-theme="obsidian"] .alert-success {
+  border-left-color: #10b981;
+  color: #6ee7b7;
+}
+
+:root[data-theme="obsidian"] .alert-warning {
+  border-left-color: #f59e0b;
+  color: #fcd34d;
+}
+
+:root[data-theme="obsidian"] .alert-error {
+  border-left-color: #dc2626;
+  color: #f87171;
+}

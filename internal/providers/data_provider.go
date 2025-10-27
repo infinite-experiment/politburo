@@ -13,6 +13,9 @@ type DataProvider interface {
 	// FetchRecords fetches multiple records with pagination support
 	FetchRecords(ctx context.Context, schema *dtos.EntitySchema, filters *SyncFilters) (*RecordSet, error)
 
+	// SubmitRecord creates a new record in the data source
+	SubmitRecord(ctx context.Context, schema *dtos.EntitySchema, fields map[string]interface{}) (string, error)
+
 	// ValidateConfig validates that the configuration is valid and can connect
 	ValidateConfig(ctx context.Context, config *dtos.ProviderConfigData) (*ValidationResult, error)
 

@@ -10,6 +10,9 @@ type FlightData struct {
 	Livery       string `json:"livery"`
 	LiveryID     string `json:"livery_id"`
 	Route        string `json:"route"`
+	Altitude     int    `json:"altitude"`   // Altitude in feet
+	Speed        int    `json:"speed"`      // Speed in knots
+	Multiplier   float64 `json:"multiplier"` // Mode multiplier
 }
 
 // GetUserFlight retrieves the current flight for a user by searching sessions

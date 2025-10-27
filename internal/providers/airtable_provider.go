@@ -163,6 +163,77 @@ func (p *AirtableProvider) FetchRecords(ctx context.Context, schema *dtos.Entity
 	return recordSet, nil
 }
 
+// SubmitRecord creates a new record in Airtable
+func (p *AirtableProvider) SubmitRecord(ctx context.Context, schema *dtos.EntitySchema, fields map[string]interface{}) (string, error) {
+	config, ok := ctx.Value("provider_config").(*dtos.ProviderConfigData)
+	if !ok {
+		return "", fmt.Errorf("provider config not found in context")
+	}
+
+	// Build request payload
+	payload := map[string]interface{}{
+		"records": []map[string]interface{}{
+			{
+				"fields": fields,
+			},
+		},
+	}
+
+	payloadBytes, err := json.Marshal(payload)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal payload: %w", err)
+	}
+
+	// Build Airtable API URL
+	url := fmt.Sprintf("https://api.airtable.com/v0/%s/%s",
+		config.Credentials.BaseID,
+		schema.TableName,
+	)
+
+	// Create request
+	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(payloadBytes))
+	if err != nil {
+		return "", fmt.Errorf("failed to create request: %w", err)
+	}
+
+	// Set headers
+	req.Header.Set("Authorization", "Bearer "+config.Credentials.APIKey)
+	req.Header.Set("Content-Type", "application/json")
+
+	// Execute request
+	resp, err := p.client.Do(req)
+	if err != nil {
+		return "", &ProviderError{
+			Code:    constants.ErrCodeNetworkError,
+			Message: constants.GetErrorMessage(constants.ErrCodeNetworkError),
+			Err:     err,
+		}
+	}
+	defer resp.Body.Close()
+
+	// Handle error responses
+	if err := p.handleHTTPError(resp); err != nil {
+		return "", err
+	}
+
+	// Parse response
+	var airtableResp struct {
+		Records []struct {
+			ID string `json:"id"`
+		} `json:"records"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&airtableResp); err != nil {
+		return "", fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	if len(airtableResp.Records) == 0 {
+		return "", fmt.Errorf("no records returned from Airtable")
+	}
+
+	return airtableResp.Records[0].ID, nil
+}
+
 // ValidateConfig validates the Airtable configuration
 func (p *AirtableProvider) ValidateConfig(ctx context.Context, config *dtos.ProviderConfigData) (*ValidationResult, error) {
 	startTime := time.Now()
