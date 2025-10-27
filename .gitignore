@@ -12,7 +12,7 @@ bin/
 pkg/
 tmp/
 *.log
-
+node_modules/
 # Dependency directories (for modules and vendoring)
 vendor/
 
