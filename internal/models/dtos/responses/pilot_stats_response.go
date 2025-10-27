@@ -9,6 +9,12 @@ type PilotStatsResponse struct {
 	// Provider data (Airtable, Google Sheets, etc.)
 	ProviderData *ProviderPilotData `json:"provider_data,omitempty"`
 
+	// Career Mode data (if configured)
+	CareerModeData *CareerModeData `json:"career_mode_data,omitempty"`
+
+	// Recent PIREPs (flight logs) from synced data
+	RecentPIREPs []RecentPIREP `json:"recent_pireps,omitempty"`
+
 	// Metadata about the response
 	Metadata PilotStatsMetadata `json:"metadata"`
 }
@@ -41,6 +47,23 @@ type ProviderPilotData struct {
 	AdditionalFields map[string]interface{} `json:"additional_fields,omitempty"`
 }
 
+// CareerModeData contains career mode specific data from the provider
+type CareerModeData struct {
+	// Standardized career mode fields (all optional)
+	TotalCMHours              *interface{} `json:"total_cm_hours,omitempty"`               // Career mode hours completed
+	RequiredHoursToNext       *interface{} `json:"required_hours_to_next,omitempty"`       // Hours needed for next aircraft
+	LastActivityCM            *string      `json:"last_activity_cm,omitempty"`             // Last career mode activity
+	AssignedRoutes            *interface{} `json:"assigned_routes,omitempty"`              // Assigned flight routes (can be array)
+	Aircraft                  *string      `json:"aircraft,omitempty"`                     // Current aircraft
+	Airline                   *string      `json:"airline,omitempty"`                      // Current airline
+	LastFlownRoute            *string      `json:"last_flown_route,omitempty"`             // Last PIREP route
+	LastCareerModePIREP       *interface{} `json:"last_career_mode_pirep,omitempty"`       // Last PIREP log reference (Airtable IDs)
+	LastCareerModeFlight      *string      `json:"last_career_mode_flight,omitempty"`      // Last career mode flight route (enriched from route_at_synced)
+
+	// All other career mode fields that don't map to standard names
+	AdditionalFields map[string]interface{} `json:"additional_fields,omitempty"`
+}
+
 // PilotStatsMetadata provides context about the data source and freshness
 type PilotStatsMetadata struct {
 	ProviderType       string `json:"provider_type,omitempty"`   // e.g., "airtable", "google_sheets"
@@ -49,4 +72,16 @@ type PilotStatsMetadata struct {
 	LastFetched        string `json:"last_fetched"`              // ISO 8601 timestamp
 	Cached             bool   `json:"cached"`                    // Whether data came from cache
 	VAName             string `json:"va_name,omitempty"`         // Name of the virtual airline
+}
+
+// RecentPIREP represents a recent PIREP (flight log) record
+type RecentPIREP struct {
+	ATID          string   `json:"at_id"`                    // Airtable record ID
+	Route         string   `json:"route"`                    // Flight route (e.g., "KLAX-KSFO")
+	FlightMode    string   `json:"flight_mode,omitempty"`    // Flight mode (e.g., "Casual", "Expert")
+	FlightTime    *float64 `json:"flight_time,omitempty"`    // Flight duration in hours
+	PilotCallsign string   `json:"pilot_callsign,omitempty"` // Pilot callsign
+	Aircraft      string   `json:"aircraft,omitempty"`       // Aircraft type (e.g., "B738")
+	Livery        string   `json:"livery,omitempty"`         // Aircraft livery/airline
+	ATCreatedTime *string  `json:"at_created_time,omitempty"` // Airtable creation timestamp
 }

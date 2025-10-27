@@ -197,6 +197,7 @@ type HistoryRecord struct {
 	Violations int       `json:"violations"`
 	Equipment  string    `json:"equipment"`
 	Duration   string    `json:"duration"`
+	Username   string    `json:"username"`
 }
 
 type FlightHistoryDto struct {

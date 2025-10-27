@@ -1,0 +1,43 @@
+{{ define "components/theme-switcher.html" }}
+<div class="theme-switcher flex items-center gap-2 bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
+    <!-- Light Theme Button -->
+    <button
+        data-theme="light"
+        class="theme-btn p-2 rounded-md text-gray-600 dark:text-gray-400 hover:bg-white dark:hover:bg-gray-600 transition"
+        title="Light Theme"
+        aria-label="Switch to light theme"
+    >
+        ☀️
+    </button>
+
+    <!-- Dark Theme Button -->
+    <button
+        data-theme="dark"
+        class="theme-btn p-2 rounded-md text-gray-600 dark:text-gray-400 hover:bg-white dark:hover:bg-gray-600 transition"
+        title="Dark Theme"
+        aria-label="Switch to dark theme"
+    >
+        🌙
+    </button>
+
+    <!-- High Contrast Theme Button -->
+    <button
+        data-theme="high-contrast"
+        class="theme-btn p-2 rounded-md text-gray-600 dark:text-gray-400 hover:bg-white dark:hover:bg-gray-600 transition"
+        title="High Contrast Theme"
+        aria-label="Switch to high contrast theme"
+    >
+        ⚙️
+    </button>
+
+    <!-- Obsidian Theme Button -->
+    <button
+        data-theme="obsidian"
+        class="theme-btn p-2 rounded-md text-gray-600 dark:text-gray-400 hover:bg-white dark:hover:bg-gray-600 transition"
+        title="Obsidian Theme"
+        aria-label="Switch to obsidian theme"
+    >
+        💜
+    </button>
+</div>
+{{ end }}

@@ -16,11 +16,11 @@ import (
 // AirtableProvider implements DataProvider for Airtable
 type AirtableProvider struct {
 	client *http.Client
-	cache  *common.CacheService
+	cache  common.CacheInterface
 }
 
 // NewAirtableProvider creates a new Airtable provider
-func NewAirtableProvider(cache *common.CacheService) *AirtableProvider {
+func NewAirtableProvider(cache common.CacheInterface) *AirtableProvider {
 	return &AirtableProvider{
 		client: &http.Client{
 			Timeout: 30 * time.Second,
@@ -147,8 +147,9 @@ func (p *AirtableProvider) FetchRecords(ctx context.Context, schema *dtos.Entity
 	records := make([]RecordWithID, len(airtableResp.Records))
 	for i, rec := range airtableResp.Records {
 		records[i] = RecordWithID{
-			ID:     rec.ID,
-			Fields: rec.Fields,
+			ID:          rec.ID,
+			Fields:      rec.Fields,
+			CreatedTime: rec.CreatedTime,
 		}
 	}
 
@@ -160,6 +161,77 @@ func (p *AirtableProvider) FetchRecords(ctx context.Context, schema *dtos.Entity
 	}
 
 	return recordSet, nil
+}
+
+// SubmitRecord creates a new record in Airtable
+func (p *AirtableProvider) SubmitRecord(ctx context.Context, schema *dtos.EntitySchema, fields map[string]interface{}) (string, error) {
+	config, ok := ctx.Value("provider_config").(*dtos.ProviderConfigData)
+	if !ok {
+		return "", fmt.Errorf("provider config not found in context")
+	}
+
+	// Build request payload
+	payload := map[string]interface{}{
+		"records": []map[string]interface{}{
+			{
+				"fields": fields,
+			},
+		},
+	}
+
+	payloadBytes, err := json.Marshal(payload)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal payload: %w", err)
+	}
+
+	// Build Airtable API URL
+	url := fmt.Sprintf("https://api.airtable.com/v0/%s/%s",
+		config.Credentials.BaseID,
+		schema.TableName,
+	)
+
+	// Create request
+	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(payloadBytes))
+	if err != nil {
+		return "", fmt.Errorf("failed to create request: %w", err)
+	}
+
+	// Set headers
+	req.Header.Set("Authorization", "Bearer "+config.Credentials.APIKey)
+	req.Header.Set("Content-Type", "application/json")
+
+	// Execute request
+	resp, err := p.client.Do(req)
+	if err != nil {
+		return "", &ProviderError{
+			Code:    constants.ErrCodeNetworkError,
+			Message: constants.GetErrorMessage(constants.ErrCodeNetworkError),
+			Err:     err,
+		}
+	}
+	defer resp.Body.Close()
+
+	// Handle error responses
+	if err := p.handleHTTPError(resp); err != nil {
+		return "", err
+	}
+
+	// Parse response
+	var airtableResp struct {
+		Records []struct {
+			ID string `json:"id"`
+		} `json:"records"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&airtableResp); err != nil {
+		return "", fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	if len(airtableResp.Records) == 0 {
+		return "", fmt.Errorf("no records returned from Airtable")
+	}
+
+	return airtableResp.Records[0].ID, nil
 }
 
 // ValidateConfig validates the Airtable configuration
@@ -315,8 +387,9 @@ func (p *AirtableProvider) buildFetchPayload(schema *dtos.EntitySchema, filters 
 // Airtable API response structures
 
 type AirtableRecordResponse struct {
-	ID     string                 `json:"id"`
-	Fields map[string]interface{} `json:"fields"`
+	ID          string                 `json:"id"`
+	Fields      map[string]interface{} `json:"fields"`
+	CreatedTime string                 `json:"createdTime,omitempty"`
 }
 
 type AirtableListResponse struct {

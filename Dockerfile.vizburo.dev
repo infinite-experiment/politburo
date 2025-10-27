@@ -1,0 +1,35 @@
+# Development Dockerfile for Vizburo UI service with hot reload
+FROM golang:1.22-alpine
+
+WORKDIR /app
+
+# Install development dependencies
+RUN apk add --no-cache git npm node-gyp
+
+# Install Air for hot reloading
+RUN go install github.com/cosmtrek/air@latest
+
+# Copy package files for npm
+COPY package.json tailwind.config.ts ./
+
+# Install npm dependencies (including Tailwind CSS)
+RUN npm install
+
+# Copy go mod files
+COPY go.mod go.sum ./
+
+# Download Go dependencies
+RUN go mod download
+
+# Copy source code
+COPY . .
+
+# Build Tailwind CSS once
+RUN npm run build:tailwind
+
+# Expose port 3000 (Vizburo UI)
+EXPOSE 3000
+
+# Run with Air for hot reloading
+# Air will watch file changes and rebuild/restart the application
+CMD ["air", "-c", ".air.vizburo.toml"]

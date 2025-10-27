@@ -7,8 +7,8 @@ WORKDIR /app
 # Install Air (hot reload tool)
 RUN go install github.com/air-verse/air@latest
 
-# Install git for modules (needed for go get in some cases)
-RUN apt-get update && apt-get install -y git
+# Install Node.js and npm for Tailwind CSS compilation
+RUN apt-get update && apt-get install -y nodejs npm git
 
 # Copy go.mod and go.sum first (for better caching)
 COPY go.mod go.sum ./

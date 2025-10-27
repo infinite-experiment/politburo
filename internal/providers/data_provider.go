@@ -13,6 +13,9 @@ type DataProvider interface {
 	// FetchRecords fetches multiple records with pagination support
 	FetchRecords(ctx context.Context, schema *dtos.EntitySchema, filters *SyncFilters) (*RecordSet, error)
 
+	// SubmitRecord creates a new record in the data source
+	SubmitRecord(ctx context.Context, schema *dtos.EntitySchema, fields map[string]interface{}) (string, error)
+
 	// ValidateConfig validates that the configuration is valid and can connect
 	ValidateConfig(ctx context.Context, config *dtos.ProviderConfigData) (*ValidationResult, error)
 
@@ -37,8 +40,9 @@ type RecordSet struct {
 
 // RecordWithID represents a record with its provider-specific ID
 type RecordWithID struct {
-	ID     string                 // Provider-specific record ID (e.g., Airtable rec...)
-	Fields map[string]interface{} // Record fields
+	ID          string                 // Provider-specific record ID (e.g., Airtable rec...)
+	Fields      map[string]interface{} // Record fields
+	CreatedTime string                 // Record creation time (ISO 8601 format)
 }
 
 // SyncFilters defines filters for fetching records

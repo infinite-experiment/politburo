@@ -11,15 +11,19 @@ import (
 )
 
 type Repositories struct {
-	User             repositories.UserRepository
-	UserGorm         *repositories.UserRepositoryGORM
-	Keys             repositories.KeysRepo
-	UserVASync       repositories.SyncRepository
-	Va               repositories.VARepository
-	DataProviderCfg  *repositories.DataProviderConfigRepo
-	VASyncHistory    *repositories.VASyncHistoryRepo
-	PilotATSynced    *repositories.PilotATSyncedRepo
-	AircraftLivery   *repositories.AircraftLiveryRepository
+	User                  repositories.UserRepository
+	UserGorm              *repositories.UserRepositoryGORM
+	Keys                  repositories.KeysRepo
+	UserVASync            repositories.SyncRepository
+	Va                    repositories.VARepository
+	VAGorm                *repositories.VAGormRepository
+	DataProviderCfg       *repositories.DataProviderConfigRepo
+	VASyncHistory         *repositories.VASyncHistoryRepo
+	PilotATSynced         *repositories.PilotATSyncedRepo
+	RouteATSynced         *repositories.RouteATSyncedRepo
+	PirepATSynced         *repositories.PirepATSyncedRepo
+	AircraftLivery        *repositories.AircraftLiveryRepository
+	LiveryAirtableMapping *repositories.LiveryAirtableMappingRepository
 }
 
 type Services struct {
@@ -32,11 +36,13 @@ type Services struct {
 	Conf               common.VAConfigService
 	VaMgmt             services.VAManagementService
 	AirtableApi        common.AirtableApiService
+	AirtableProvider   *providers.AirtableProvider
 	AirtableSync       services.AtSyncService
 	Flights            services.FlightsService
 	PilotStats         *services.PilotStatsService
 	DataProviderConfig *services.DataProviderConfigService
 	AircraftLivery     *common.AircraftLiveryService
+	RedisQueue         common.RedisQueueService
 }
 type Dependencies struct {
 	Repo     *Repositories
@@ -46,29 +52,36 @@ type Dependencies struct {
 func InitDependencies() (*Dependencies, error) {
 
 	repositories := &Repositories{
-		User:            *repositories.NewUserRepository(db.DB),
-		UserGorm:        repositories.NewUserRepositoryGORM(db.PgDB),
-		Keys:            *repositories.NewApiKeysRepo(db.DB),
-		Va:              *repositories.NewVARepository(db.DB),
-		UserVASync:      *repositories.NewSyncRepository(db.DB),
-		DataProviderCfg: repositories.NewDataProviderConfigRepo(db.PgDB),
-		VASyncHistory:   repositories.NewVASyncHistoryRepo(db.PgDB),
-		PilotATSynced:   repositories.NewPilotATSyncedRepo(db.PgDB),
-		AircraftLivery:  repositories.NewAircraftLiveryRepository(db.PgDB),
+		User:                  *repositories.NewUserRepository(db.DB),
+		UserGorm:              repositories.NewUserRepositoryGORM(db.PgDB),
+		Keys:                  *repositories.NewApiKeysRepo(db.DB),
+		Va:                    *repositories.NewVARepository(db.DB),
+		VAGorm:                repositories.NewVAGormRepository(db.PgDB),
+		UserVASync:            *repositories.NewSyncRepository(db.DB),
+		DataProviderCfg:       repositories.NewDataProviderConfigRepo(db.PgDB),
+		VASyncHistory:         repositories.NewVASyncHistoryRepo(db.PgDB),
+		PilotATSynced:         repositories.NewPilotATSyncedRepo(db.PgDB),
+		RouteATSynced:         repositories.NewRouteATSyncedRepo(db.PgDB),
+		PirepATSynced:         repositories.NewPirepATSyncedRepo(db.PgDB),
+		AircraftLivery:        repositories.NewAircraftLiveryRepository(db.PgDB),
+		LiveryAirtableMapping: repositories.NewLiveryAirtableMappingRepository(db.PgDB),
 	}
 
 	// Initialize cache service (Redis or in-memory based on USE_REDIS_CACHE env var)
 	var cacheSvc common.CacheInterface
 	useRedis := os.Getenv("USE_REDIS_CACHE") == "true"
 
+	var redisQSvc common.RedisQueueService
 	if useRedis {
-		redisCache, err := common.NewRedisCacheService()
+		redisClient := common.NewRedisClient()
+		redisCache, err := common.NewRedisCacheService(redisClient)
 		if err != nil {
 			log.Printf("Failed to initialize Redis cache, falling back to in-memory: %v", err)
 			cacheSvc = common.NewCacheService(60000, 600)
 		} else {
 			log.Println("Using Redis cache")
 			cacheSvc = redisCache
+			redisQSvc = *common.NewRedisQueueService(redisClient)
 		}
 	} else {
 		log.Println("Using in-memory cache")
@@ -91,19 +104,27 @@ func InitDependencies() (*Dependencies, error) {
 	liveAPIProvider := providers.NewLiveAPIProvider()
 
 	// Initialize pilot stats service first (needed by UserService)
-	pilotStatsSvc := services.NewPilotStatsService(db.DB, db.PgDB, legacyCache, repositories.DataProviderCfg, &repositories.User, confSvc)
+	pilotStatsSvc := services.NewPilotStatsService(db.DB, db.PgDB, legacyCache, repositories.DataProviderCfg, &repositories.User, confSvc, repositories.PirepATSynced, repositories.RouteATSynced)
 
 	// Initialize user service with both sqlx and GORM repositories and pilot stats service
 	userSvc := services.NewUserService(&repositories.User, repositories.UserGorm, pilotStatsSvc)
 
 	// Initialize data provider config service
-	dataProviderConfigSvc := services.NewDataProviderConfigService(repositories.DataProviderCfg)
+	dataProviderConfigSvc := services.NewDataProviderConfigService(repositories.DataProviderCfg, cacheSvc)
+	if dataProviderConfigSvc == nil {
+		log.Println("WARNING: DataProviderConfigService is nil after initialization!")
+	} else {
+		log.Println("DataProviderConfigService initialized successfully")
+	}
 
 	// Initialize V2 registration service with GORM and LiveAPIProvider
 	regServiceV2 := services.NewRegistrationServiceV2(db.PgDB, liveAPIProvider)
 
 	// Initialize aircraft livery service
 	aircraftLiverySvc := common.NewAircraftLiveryService(legacyCache, repositories.AircraftLivery)
+
+	// Initialize Airtable provider
+	airtableProvider := providers.NewAirtableProvider(cacheSvc)
 
 	svc := &Services{
 		User:               userSvc,
@@ -112,6 +133,7 @@ func InitDependencies() (*Dependencies, error) {
 		Conf:               *confSvc,
 		VaMgmt:             *services.NewVAManagementService(repositories.Va, repositories.User),
 		AirtableApi:        *common.NewAirtableApiService(confSvc),
+		AirtableProvider:   airtableProvider,
 		AirtableSync:       *services.NewAtSyncService(legacyCache, &repositories.UserVASync),
 		Flights:            *services.NewFlightsService(legacyCache, liveSvc, confSvc, aircraftLiverySvc),
 		PilotStats:         pilotStatsSvc,
@@ -120,6 +142,7 @@ func InitDependencies() (*Dependencies, error) {
 		Cache:              cacheSvc,
 		LegacyCache:        legacyCache,
 		Live:               *liveSvc,
+		RedisQueue:         redisQSvc,
 	}
 
 	return &Dependencies{

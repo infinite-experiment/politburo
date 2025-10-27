@@ -1,0 +1,46 @@
+{{ define "components/navbar.html" }}
+<nav class="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 shadow-sm">
+    <div class="flex items-center justify-between h-16 px-6">
+        <!-- Left: Logo & Hamburger -->
+        <div class="flex items-center gap-4">
+            <!-- Hamburger Button (visible on mobile) -->
+            <button
+                id="sidebar-toggle-btn"
+                class="md:hidden p-2 rounded-md text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition"
+                aria-label="Toggle sidebar"
+            >
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+                </svg>
+            </button>
+
+            <!-- Logo -->
+            <div class="flex items-center gap-2">
+                <div class="w-8 h-8 bg-flight-primary rounded-lg flex items-center justify-center text-white font-bold">
+                    V
+                </div>
+                <span class="text-xl font-bold text-gray-900 dark:text-white hidden sm:inline">Vizburo</span>
+            </div>
+        </div>
+
+        <!-- Center: Page Title -->
+        <h1 class="text-lg font-semibold text-gray-900 dark:text-white hidden md:inline">
+            {{ .Title }}
+        </h1>
+
+        <!-- Right: User Info -->
+        <div class="flex items-center gap-4">
+            <!-- User Dropdown (placeholder) -->
+            <div class="flex items-center gap-3">
+                <div class="hidden md:flex flex-col items-end text-sm">
+                    <span class="font-medium text-gray-900 dark:text-white">User</span>
+                    <span class="text-xs text-gray-500 dark:text-gray-400">Guest</span>
+                </div>
+                <div class="w-10 h-10 rounded-full bg-flight-primary text-white flex items-center justify-center font-bold">
+                    U
+                </div>
+            </div>
+        </div>
+    </div>
+</nav>
+{{ end }}

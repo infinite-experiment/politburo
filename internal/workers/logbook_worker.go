@@ -18,7 +18,7 @@ type LogbookRequest struct {
 
 var LogbookQueue = make(chan LogbookRequest, 100)
 
-func LogbookWorker(c *common.CacheService, liveApiService *common.LiveAPIService, liverySvc *common.AircraftLiveryService) {
+func LogbookWorker(cache common.CacheInterface, liveApiService *common.LiveAPIService, liverySvc *common.AircraftLiveryService) {
 	log.Printf("[DEBUG] LogbookWorker started, queue_addr=%p", LogbookQueue)
 	for req := range LogbookQueue {
 
@@ -30,7 +30,7 @@ func LogbookWorker(c *common.CacheService, liveApiService *common.LiveAPIService
 			log.Println("❌ Skipping: missing origin or destination")
 			continue
 		}
-		if val, found := c.Get(cacheKey); found && val != nil {
+		if val, found := cache.Get(cacheKey); found && val != nil {
 			log.Printf("⚠️  Flight %s already cached, skipping\n", req.FlightId)
 			continue
 		}
@@ -113,7 +113,8 @@ func LogbookWorker(c *common.CacheService, liveApiService *common.LiveAPIService
 			Dest:   destNode,
 		}
 
-		c.Set(cacheKey, flightInfo, 600000*time.Second)
+		// Cache for 7 days (604800 seconds)
+		cache.Set(cacheKey, flightInfo, 7*24*time.Hour)
 		log.Printf("✅ Cached %d points for flight %s\nCACHE_KEY=%s", len(data.Result), req.FlightId, cacheKey)
 
 	}

@@ -1,0 +1,26 @@
+{
+  "name": "politburo-vizburo",
+  "version": "1.0.0",
+  "description": "Vizburo - Flight Routes Visualization for Politburo",
+  "scripts": {
+    "build:tailwind": "tailwindcss -i ./vizburo/ui/static/css/input.css -o ./vizburo/ui/static/css/tailwind.css --minify",
+    "watch:tailwind": "tailwindcss -i ./vizburo/ui/static/css/input.css -o ./vizburo/ui/static/css/tailwind.css --watch",
+    "dev": "concurrently \"npm run watch:tailwind\" \"go run ./cmd/server/main.go\"",
+    "build": "npm run build:tailwind"
+  },
+  "keywords": [
+    "vizburo",
+    "flight",
+    "visualization",
+    "tailwind",
+    "go"
+  ],
+  "author": "Infinite Experiment",
+  "license": "AGPL-3.0",
+  "devDependencies": {
+    "@tailwindcss/cli": "^4.1.0",
+    "@tailwindcss/typography": "^0.5.13",
+    "concurrently": "^8.2.2",
+    "tailwindcss": "^4.1.0"
+  }
+}

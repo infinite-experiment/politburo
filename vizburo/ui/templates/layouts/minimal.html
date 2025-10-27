@@ -1,0 +1,16 @@
+{{ define "layouts/minimal.html" }}
+<div class="flex h-screen flex-col">
+    <!-- Navbar -->
+    {{ template "components/navbar.html" . }}
+
+    <!-- Main Content Area (No Sidebar) -->
+    <main class="flex-1 overflow-y-auto">
+        <div class="p-6">
+            {{ .Content | safeHTML }}
+        </div>
+    </main>
+
+    <!-- Footer -->
+    {{ template "components/footer.html" . }}
+</div>
+{{ end }}

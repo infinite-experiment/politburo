@@ -2,11 +2,14 @@ package services
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"infinite-experiment/politburo/internal/common"
 	"infinite-experiment/politburo/internal/constants"
 	"infinite-experiment/politburo/internal/db/repositories"
 	"infinite-experiment/politburo/internal/models"
 	"infinite-experiment/politburo/internal/models/dtos"
+	"log"
 	"time"
 
 	"github.com/lib/pq"
@@ -14,11 +17,13 @@ import (
 
 type DataProviderConfigService struct {
 	configRepo *repositories.DataProviderConfigRepo
+	cache      common.CacheInterface
 }
 
-func NewDataProviderConfigService(configRepo *repositories.DataProviderConfigRepo) *DataProviderConfigService {
+func NewDataProviderConfigService(configRepo *repositories.DataProviderConfigRepo, cache common.CacheInterface) *DataProviderConfigService {
 	return &DataProviderConfigService{
 		configRepo: configRepo,
+		cache:      cache,
 	}
 }
 
@@ -72,6 +77,11 @@ func (s *DataProviderConfigService) SaveOrUpdateConfig(ctx context.Context, vaID
 			}
 		}
 
+		// Evict from cache to force refresh on next fetch
+		cacheKey := fmt.Sprintf("provider_config:%s:%s", vaID, req.ProviderType)
+		s.cache.Delete(cacheKey)
+		log.Printf("[DataProviderConfigService] Evicted cache for updated config: VA=%s, Provider=%s", vaID, req.ProviderType)
+
 		config = existingConfig
 
 	} else {
@@ -95,6 +105,11 @@ func (s *DataProviderConfigService) SaveOrUpdateConfig(ctx context.Context, vaID
 				Err:     err,
 			}
 		}
+
+		// Evict from cache to force refresh on next fetch
+		cacheKey := fmt.Sprintf("provider_config:%s:%s", vaID, req.ProviderType)
+		s.cache.Delete(cacheKey)
+		log.Printf("[DataProviderConfigService] Evicted cache for new config: VA=%s, Provider=%s", vaID, req.ProviderType)
 
 		config = newConfig
 	}
@@ -201,15 +216,15 @@ func (s *DataProviderConfigService) validateConfigRequest(req *dtos.SaveProvider
 
 // DataProviderConfigResponse is the response for config operations
 type DataProviderConfigResponse struct {
-	ID               string                  `json:"id"`
-	ProviderType     string                  `json:"provider_type"`
-	ConfigVersion    int                     `json:"config_version"`
-	IsActive         bool                    `json:"is_active"`
-	ValidationStatus string                  `json:"validation_status"`
-	FeaturesEnabled  []string                `json:"features_enabled"`
+	ID               string                   `json:"id"`
+	ProviderType     string                   `json:"provider_type"`
+	ConfigVersion    int                      `json:"config_version"`
+	IsActive         bool                     `json:"is_active"`
+	ValidationStatus string                   `json:"validation_status"`
+	FeaturesEnabled  []string                 `json:"features_enabled"`
 	ConfigData       *dtos.ProviderConfigData `json:"config_data,omitempty"`
-	CreatedAt        string                  `json:"created_at"`
-	UpdatedAt        string                  `json:"updated_at"`
+	CreatedAt        string                   `json:"created_at"`
+	UpdatedAt        string                   `json:"updated_at"`
 }
 
 // ConfigError represents a configuration error
@@ -228,4 +243,44 @@ func (e *ConfigError) Error() string {
 
 func (e *ConfigError) Unwrap() error {
 	return e.Err
+}
+
+// GetActiveConfigCached fetches the active config for a VA with caching (24-hour TTL)
+func (s *DataProviderConfigService) GetActiveConfigCached(ctx context.Context, vaID, providerType string) (*dtos.ProviderConfigData, error) {
+	// Build cache key
+	cacheKey := fmt.Sprintf("provider_config:%s:%s", vaID, providerType)
+
+	// Check cache first
+	if cached, found := s.cache.Get(cacheKey); found {
+		if configData, ok := cached.(*dtos.ProviderConfigData); ok {
+			configJSON, _ := json.MarshalIndent(configData, "", "  ")
+			log.Printf("[DataProviderConfigService] Cache hit for provider config: VA=%s, Provider=%s\nConfig:\n%s", vaID, providerType, string(configJSON))
+			return configData, nil
+		}
+	}
+
+	// Cache miss - fetch from database
+	log.Printf("[DataProviderConfigService] Cache miss for provider config: VA=%s, Provider=%s, fetching from database", vaID, providerType)
+
+	providerConfig, err := s.configRepo.GetActiveConfig(ctx, vaID, providerType)
+	if err != nil || providerConfig == nil {
+		if err != nil {
+			log.Printf("[DataProviderConfigService] Error fetching provider config: %v", err)
+		}
+		return nil, err
+	}
+
+	// Parse config data
+	configData, err := repositories.ParseConfigData(providerConfig.ConfigData)
+	if err != nil {
+		log.Printf("[DataProviderConfigService] Error parsing provider config: %v", err)
+		return nil, err
+	}
+
+	// Cache for 24 hours
+	s.cache.Set(cacheKey, configData, 24*time.Hour)
+	configJSON, _ := json.MarshalIndent(configData, "", "  ")
+	log.Printf("[DataProviderConfigService] Cached provider config: VA=%s, Provider=%s, TTL=24h\nConfig:\n%s", vaID, providerType, string(configJSON))
+
+	return configData, nil
 }
