@@ -19,6 +19,8 @@ RUN apk add --no-cache ca-certificates
 
 WORKDIR /app
 COPY --from=builder /app/bin/app .
+# Copy template files for the UI
+COPY --from=builder /app/vizburo/ui/templates ./vizburo/ui/templates
 
 # expose your port
 EXPOSE 8080
