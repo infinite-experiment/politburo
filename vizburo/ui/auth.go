@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -121,20 +122,34 @@ func (h *AuthHandler) TokenLoginHandler(w http.ResponseWriter, r *http.Request) 
 	log.Printf("[TokenLoginHandler] Session created: %s for user %s with %d VAs", sessionID, signedToken.UserID, len(virtualAirlines))
 
 	// Set session cookie (7 days, HTTP-only)
-	// Note: Secure flag is false for development (HTTP), should be true in production (HTTPS)
-	// Extract domain from request Host header
-	host := r.Host
+	// Get the forwarded host from headers (set by Caddy reverse proxy), fallback to request Host
+	host := r.Header.Get("X-Forwarded-Host")
+	if host == "" {
+		host = r.Host
+	}
+
+	// Extract domain from host (remove port)
 	if idx := strings.LastIndex(host, ":"); idx != -1 {
 		host = host[:idx]  // Remove port for cookie domain
 	}
+
+	// Determine if HTTPS is being used
+	scheme := r.Header.Get("X-Forwarded-Proto")
+	if scheme == "" {
+		scheme = "http"
+		if r.TLS != nil {
+			scheme = "https"
+		}
+	}
+	isSecure := scheme == "https"
 
 	cookie := &http.Cookie{
 		Name:     "session_id",
 		Value:    sessionID,
 		Path:     "/",
-		Domain:   host,  // Explicitly set domain for the request origin
+		Domain:   host,  // Use forwarded host for proper cookie domain
 		HttpOnly: true,
-		Secure:   false,  // Set to true in production for HTTPS only
+		Secure:   isSecure,  // Only set for HTTPS
 		SameSite: http.SameSiteLaxMode,  // Lax allows same-site cookies
 		MaxAge:   604800, // 7 days in seconds
 	}
@@ -201,10 +216,28 @@ func (h *AuthHandler) GenerateDashboardLinkHandler(w http.ResponseWriter, r *htt
 		return
 	}
 
+	// Get the UI base URL from environment, fallback to current request
+	uiBaseURL := os.Getenv("UI_BASE_URL")
+	if uiBaseURL == "" {
+		// Fallback: construct from request headers
+		scheme := r.Header.Get("X-Forwarded-Proto")
+		if scheme == "" {
+			scheme = "http"
+			if r.TLS != nil {
+				scheme = "https"
+			}
+		}
+		forwardedHost := r.Header.Get("X-Forwarded-Host")
+		if forwardedHost == "" {
+			forwardedHost = r.Host
+		}
+		uiBaseURL = scheme + "://" + forwardedHost
+	}
+
 	// Return JSON with link
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"url":        fmt.Sprintf("%s/auth/login?token=%s", "http://localhost:8080", token),
+		"url":        fmt.Sprintf("%s/auth/login?token=%s", uiBaseURL, token),
 		"expires_in": 900,  // seconds
 	})
 }
