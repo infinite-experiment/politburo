@@ -184,12 +184,14 @@ type UserFlightsRawResponse struct {
 }
 
 type HistoryRecord struct {
+	FlightID   string    `json:"flightId"`
 	Origin     string    `json:"origin"`
 	Dest       string    `json:"dest"`
 	TimeStamp  time.Time `json:"timestamp"`
 	EndTime    time.Time `json:"endtime"`
 	Landings   int       `json:"landings"`
 	Server     string    `json:"server"`
+	SessionID  string    `json:"sessionId"` // Session ID for Live API route endpoint
 	Aircraft   string    `json:"aircraft"`
 	Livery     string    `json:"livery"`
 	MapUrl     string    `json:"mapUrl"`

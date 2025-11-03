@@ -14,14 +14,14 @@ import (
 // This keeps API route registration separate from the main router setup
 func RegisterAPIRoutes(r chi.Router, userRepoGorm *repositories.UserRepositoryGORM, keyRepo *repositories.KeysRepo,
 	handlers *api.Handlers, legacyCacheSvc *common.CacheService, cfgSvc *common.VAConfigService, vaMgmtSvc *services.VAManagementService,
-	atApiSvc *common.AirtableApiService, syncSvc *services.AtSyncService, flightSvc *services.FlightsService, jobsHandler *api.JobsHandler, deps *api.Dependencies) {
+	atApiSvc *common.AirtableApiService, syncSvc *services.AtSyncService, flightSvc *services.FlightsService, jobsHandler *api.JobsHandler, deps *api.Dependencies, airportLoader *common.AirportLoaderService, sessionSvc *common.SessionService) {
 
 	r.Get("/public/flight", api.UserFlightMapHandler(legacyCacheSvc))
 	r.Get("/public/flight/user", api.UserFlightsCacheHandler(legacyCacheSvc))
 
 	// API v1 routes
 	r.Route("/api/v1", func(v1 chi.Router) {
-		v1.Use(middleware.AuthMiddleware(userRepoGorm, keyRepo)) // global: all routes must be authenticated (using GORM)
+		v1.Use(middleware.AuthMiddleware(userRepoGorm, keyRepo, sessionSvc)) // global: all routes must be authenticated (using GORM or session cookie)
 		v1.Get("/user/details", handlers.GetUserDetails())
 		v1.Get("/admin/verify-god", handlers.VerifyGodMode())
 
@@ -35,6 +35,9 @@ func RegisterAPIRoutes(r chi.Router, userRepoGorm *repositories.UserRepositoryGO
 			registered.Use(middleware.IsRegisteredMiddleware())
 
 			registered.Post("/server/init", handlers.InitServerRegistrationV2())
+
+			// Dashboard link generation for UI access
+			registered.Post("/auth/generate-dashboard-link", handlers.GenerateDashboardLinkHandler())
 
 			// Member-only group (requires registered first)
 			registered.Group(func(member chi.Router) {
@@ -75,6 +78,9 @@ func RegisterAPIRoutes(r chi.Router, userRepoGorm *repositories.UserRepositoryGO
 						// Background jobs management
 						admin.Post("/admin/jobs/sync-pilots", jobsHandler.TriggerPilotSync())
 						admin.Get("/admin/jobs/status", jobsHandler.GetJobStatus())
+
+						// Airport data management
+						admin.Post("/admin/data/sync-airports", api.SyncAirportsHandler(airportLoader))
 
 					})
 				})

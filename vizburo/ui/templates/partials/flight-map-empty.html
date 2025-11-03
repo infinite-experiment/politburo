@@ -1,0 +1,73 @@
+{{define "content"}}
+<div class="flex items-center justify-center h-full overflow-auto">
+  <div class="text-center" style="color: var(--nord4); padding: 2rem; max-width: 600px;">
+    <svg class="w-16 h-16 mx-auto mb-4" style="color: var(--nord8);" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+    </svg>
+    {{if .FlightID}}
+    <p class="text-lg font-medium" style="color: var(--nord6); margin-bottom: 0.5rem;">Route data not cached</p>
+    <p class="text-sm" style="color: var(--nord4); margin-bottom: 1.5rem;">This flight route hasn't been processed yet. Test the Live API endpoint below.</p>
+    {{else}}
+    <p class="text-lg font-medium" style="color: var(--nord6); margin-bottom: 0.5rem;">Select a flight to view route</p>
+    <p class="text-sm" style="color: var(--nord4); margin-bottom: 1.5rem;">Search for a pilot or browse recent flights to see the map</p>
+    {{end}}
+
+    <!-- Debug Info: Live API Endpoints for Testing -->
+    <div style="margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid var(--nord3); text-align: left;">
+      <p class="text-xs font-semibold" style="color: var(--nord8); margin-bottom: 0.75rem; text-align: center;">📡 Debug: Test Flight Route Endpoint</p>
+
+      <div style="background: var(--nord0); border: 1px solid var(--nord3); border-radius: 0.375rem; padding: 0.75rem; margin-bottom: 0.75rem; font-size: 0.75rem;">
+        {{if .FlightID}}
+        <!-- Dynamic endpoint with actual flight ID and session -->
+        <p style="color: var(--nord4); margin: 0.5rem 0;">Live API endpoint for flight <code style="color: var(--nord13); background: var(--nord1); padding: 0.1rem 0.25rem; border-radius: 0.2rem;">{{.FlightID}}</code>:</p>
+        {{if .SessionID}}
+        <p style="color: var(--nord4); margin: 0.25rem 0; font-size: 0.65rem;">Session: <code style="color: var(--nord14); background: var(--nord1); padding: 0.1rem 0.25rem; border-radius: 0.2rem;">{{.SessionID}}</code></p>
+        <a href="https://api.infiniteflight.com/public/v2/sessions/{{.SessionID}}/flights/{{.FlightID}}/route?apikey={{.APIKey}}"
+           target="_blank"
+           rel="noopener noreferrer"
+           style="color: var(--nord8); text-decoration: underline; word-break: break-all; display: block; margin-top: 0.5rem; font-family: monospace; font-size: 0.7rem;">
+            https://api.infiniteflight.com/public/v2/sessions/{{.SessionID}}/flights/{{.FlightID}}/route?apikey={{if .APIKey}}[SET]{{else}}NOT_SET{{end}}
+        </a>
+        {{else}}
+        <p style="color: var(--nord4); margin: 0.25rem 0; font-size: 0.65rem;">Session: <code style="color: var(--nord11); background: var(--nord1); padding: 0.1rem 0.25rem; border-radius: 0.2rem;">LOADING...</code></p>
+        <p style="color: var(--nord4); margin: 0.5rem 0; font-size: 0.7rem;">⏳ Session ID not yet available. The route endpoint requires a session ID.</p>
+        <a href="https://api.infiniteflight.com/public/v2/sessions/{sessionId}/flights/{{.FlightID}}/route?apikey={{if .APIKey}}[SET]{{else}}NOT_SET{{end}}"
+           target="_blank"
+           rel="noopener noreferrer"
+           style="color: var(--nord8); text-decoration: underline; word-break: break-all; display: block; margin-top: 0.5rem; font-family: monospace; font-size: 0.7rem;">
+            https://api.infiniteflight.com/public/v2/sessions/{sessionId}/flights/{{.FlightID}}/route?apikey={{if .APIKey}}[SET]{{else}}NOT_SET{{end}}
+        </a>
+        {{end}}
+        {{else}}
+        <!-- Template endpoint for reference -->
+        <p style="color: var(--nord4); margin: 0.5rem 0;">Test Live API flight route endpoint:</p>
+        <p style="color: var(--nord4); margin: 0.25rem 0; font-size: 0.65rem;">This endpoint requires both a session ID and flight ID:</p>
+        <a href="https://api.infiniteflight.com/public/v2/sessions/{sessionId}/flights/{flightId}/route?apikey=YOUR_API_KEY"
+           target="_blank"
+           rel="noopener noreferrer"
+           style="color: var(--nord8); text-decoration: underline; word-break: break-all; display: block; margin-top: 0.5rem; font-family: monospace; font-size: 0.7rem;">
+            https://api.infiniteflight.com/public/v2/sessions/{sessionId}/flights/{flightId}/route?apikey=YOUR_API_KEY
+        </a>
+        {{end}}
+
+        <div style="margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--nord3);">
+          <p style="color: var(--nord4); margin: 0.25rem 0; font-size: 0.7rem;">Steps:</p>
+          <ol style="color: var(--nord4); margin: 0.5rem 0; padding-left: 1.2rem; font-size: 0.7rem; text-align: left;">
+            <li style="margin: 0.25rem 0;">Get your API key from <a href="https://api.infiniteflight.com/" target="_blank" rel="noopener noreferrer" style="color: var(--nord8);">api.infiniteflight.com</a></li>
+            {{if not .FlightID}}
+            <li style="margin: 0.25rem 0;">Replace <code style="color: var(--nord13); background: var(--nord1); padding: 0.1rem 0.25rem; border-radius: 0.2rem;">{flightId}</code> with a flight ID from the list</li>
+            {{end}}
+            {{if not .APIKey}}
+            <li style="margin: 0.25rem 0;">Replace <code style="color: var(--nord13); background: var(--nord1); padding: 0.1rem 0.25rem; border-radius: 0.2rem;">YOUR_API_KEY</code> with your actual API key</li>
+            {{else}}
+            <li style="margin: 0.25rem 0;">API key is configured (<code style="color: var(--nord14); background: var(--nord1); padding: 0.1rem 0.25rem; border-radius: 0.2rem;">IF_API_KEY</code> env var)</li>
+            {{end}}
+            <li style="margin: 0.25rem 0;">If the endpoint returns data, click the link in a new tab to test it directly</li>
+            <li style="margin: 0.25rem 0;">The background worker will cache the route data when the Live API responds successfully</li>
+          </ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{{end}}

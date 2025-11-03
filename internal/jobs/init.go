@@ -28,6 +28,7 @@ func InitializeJobs(
 	pilotATSyncedRepo *repositories.PilotATSyncedRepo,
 	routeATSyncedRepo *repositories.RouteATSyncedRepo,
 	pirepATSyncedRepo *repositories.PirepATSyncedRepo,
+	airportIcaoRepo *repositories.AirportRepository,
 	vaConfigService *common.VAConfigService,
 	redisQueue *common.RedisQueueService,
 ) *JobsContainer {
@@ -48,6 +49,7 @@ func InitializeJobs(
 		configRepo,
 		syncHistoryRepo,
 		routeATSyncedRepo,
+		airportIcaoRepo,
 	)
 
 	// Initialize PIREP sync job (syncs PIREPs from Airtable every hour)

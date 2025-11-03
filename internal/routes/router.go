@@ -6,8 +6,13 @@ import (
 	"time"
 
 	"infinite-experiment/politburo/internal/api"
+	"infinite-experiment/politburo/internal/common"
 	"infinite-experiment/politburo/internal/db"
+	"infinite-experiment/politburo/internal/db/repositories"
 	"infinite-experiment/politburo/internal/jobs"
+	"infinite-experiment/politburo/internal/logging"
+	"infinite-experiment/politburo/internal/metrics"
+	"infinite-experiment/politburo/internal/middleware"
 	"infinite-experiment/politburo/internal/workers"
 
 	"github.com/go-chi/chi/v5"
@@ -19,8 +24,12 @@ func RegisterRoutes(upSince time.Time) http.Handler {
 	// initialize Chi router
 	r := chi.NewRouter()
 
+	// Initialize metrics registry
+	metricsReg := metrics.NewMetricsRegistry()
+
 	// global middleware
-	//r.Use(middleware.Logging)
+	r.Use(middleware.RequestIDMiddleware)
+	r.Use(middleware.MetricsMiddleware(metricsReg))
 
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   []string{"https://*", "http://localhost:8081"}, // Allow all origins
@@ -30,6 +39,8 @@ func RegisterRoutes(upSince time.Time) http.Handler {
 		AllowCredentials: false,
 		MaxAge:           300, // Maximum value not ignored by any of major browsers
 	}))
+
+	logging.Info("Router initialized with metrics and logging middleware")
 	// health check
 	r.Get("/healthCheck", api.HealthCheckHandler(db.DB, upSince))
 
@@ -52,8 +63,19 @@ func RegisterRoutes(upSince time.Time) http.Handler {
 	syncSvc := &deps.Services.AirtableSync
 	flightSvc := &deps.Services.Flights
 
+	// Get session and URL signer services from dependencies (reuses same Redis client)
+	sessionSvc := deps.Services.Session
+	urlSigner := deps.Services.URLSigner
+
+	// Initialize VA repositories for UI
+	vaGormRepo := repositories.NewVAGORMRepository(db.PgDB)
+	vaUserRoleRepo := repositories.NewVAUserRoleRepository(db.PgDB)
+
+	// Update AuthMiddleware to use session service
+	// This will be passed to middleware when creating handlers
+
 	// Register UI routes (separate from API)
-	RegisterUIRoutes(r)
+	RegisterUIRoutes(r, sessionSvc, urlSigner, userRepoGorm, vaUserRoleRepo, vaGormRepo, flightSvc, deps.Services.Cache, &deps.Services.Live)
 
 	// Setup workers and jobs first
 	// Setup scheduled jobs (both pilot and route sync run every hour)
@@ -66,6 +88,7 @@ func RegisterRoutes(upSince time.Time) http.Handler {
 		deps.Repo.PilotATSynced,
 		deps.Repo.RouteATSynced,
 		deps.Repo.PirepATSynced,
+		deps.Repo.AirportsRepo,
 		cfgSvc,
 		&deps.Services.RedisQueue,
 	)
@@ -85,8 +108,11 @@ func RegisterRoutes(upSince time.Time) http.Handler {
 	// Initialize jobs handler for manual triggering
 	jobsHandler := api.NewJobsHandler(jobsContainer.PilotSync)
 
+	// Initialize airport loader service
+	airportLoader := common.NewAirportLoaderService(db.PgDB)
+
 	// Register API routes (after jobsHandler is initialized)
-	RegisterAPIRoutes(r, userRepoGorm, keyRepo, handlers, legacyCacheSvc, cfgSvc, vaMgmtSvc, atApiSvc, syncSvc, flightSvc, jobsHandler, deps)
+	RegisterAPIRoutes(r, userRepoGorm, keyRepo, handlers, legacyCacheSvc, cfgSvc, vaMgmtSvc, atApiSvc, syncSvc, flightSvc, jobsHandler, deps, airportLoader, sessionSvc)
 
 	return r
 }

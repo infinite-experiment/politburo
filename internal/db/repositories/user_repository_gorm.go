@@ -38,6 +38,24 @@ func (r *UserRepositoryGORM) GetUserWithVAAffiliations(ctx context.Context, user
 	return &user, nil
 }
 
+// GetByID retrieves a user by UUID
+func (r *UserRepositoryGORM) GetByID(ctx context.Context, userID string) (*gormModels.User, error) {
+	var user gormModels.User
+
+	err := r.db.WithContext(ctx).
+		Where("id = ?", userID).
+		First(&user).Error
+
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, fmt.Errorf("user not found")
+		}
+		return nil, fmt.Errorf("failed to fetch user: %w", err)
+	}
+
+	return &user, nil
+}
+
 // GetUserByDiscordID retrieves a user by Discord ID without relationships
 func (r *UserRepositoryGORM) GetUserByDiscordID(ctx context.Context, discordID string) (*gormModels.User, error) {
 	var user gormModels.User

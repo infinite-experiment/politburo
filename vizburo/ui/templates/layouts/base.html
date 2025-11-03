@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.PageTitle}} - Vizburo</title>
+    <link rel="stylesheet" href="/static/css/output.css">
+    <script src="/static/js/htmx.min.js"></script>
+    <style>
+        :root {
+            --nord0: #2E3440;
+            --nord1: #3B4252;
+            --nord2: #434C5E;
+            --nord3: #4C566A;
+            --nord4: #D8DEE9;
+            --nord5: #E5E9F0;
+            --nord6: #ECEFF4;
+            --nord7: #8FBCBB;
+            --nord8: #88C0D0;
+            --nord9: #81A1C1;
+            --nord10: #5E81AC;
+            --nord11: #BF616A;
+            --nord12: #D08770;
+            --nord13: #EBCB8B;
+            --nord14: #A3BE8C;
+            --nord15: #B48EAD;
+        }
+
+        /* Responsive layout */
+        @media (max-width: 768px) {
+            body {
+                flex-direction: column;
+            }
+            aside {
+                max-height: 50vh;
+                border-right: none;
+                border-bottom: 1px solid var(--nord3);
+            }
+            main {
+                flex: 1;
+            }
+            .sidebar-nav {
+                flex-direction: row;
+                overflow-x: auto;
+            }
+            .sidebar-nav ul {
+                display: flex;
+                gap: 0.5rem;
+                flex-wrap: nowrap;
+            }
+            .sidebar-nav li {
+                flex: 0 0 auto;
+            }
+        }
+
+        @media (max-width: 640px) {
+            header {
+                padding: 1rem !important;
+            }
+            .header-title {
+                font-size: 1rem !important;
+            }
+            .header-subtitle {
+                font-size: 0.75rem !important;
+            }
+            .content-area {
+                padding: 1rem !important;
+            }
+        }
+    </style>
+</head>
+<body class="flex h-screen" style="background-color: var(--nord0);">
+    <!-- Sidebar (Collapsible on mobile) -->
+    <aside class="w-64 flex flex-col lg:w-64 md:w-48 md:max-h-auto" style="background-color: var(--nord1); border-right: 1px solid var(--nord3);">
+        <!-- Logo Section -->
+        <div class="h-16 flex items-center justify-center md:h-12" style="border-bottom: 1px solid var(--nord3); flex-shrink: 0;">
+            <h1 class="text-xl font-bold md:text-lg" style="color: var(--nord8);">Vizburo</h1>
+        </div>
+
+        <!-- VA List -->
+        <nav class="flex-1 overflow-y-auto md:overflow-x-auto px-2 py-4 space-y-1 sidebar-nav" style="display: flex; flex-direction: column;">
+            <ul class="space-y-1 md:space-y-0 md:flex md:gap-2 list-none" style="margin: 0; padding: 0;">
+                {{range .VirtualAirlines}}
+                <li style="flex: 0 0 auto;">
+                    <button
+                        type="button"
+                        hx-post="/dashboard/switch-va"
+                        hx-vals='{"va_id":"{{.VAID}}"}'
+                        hx-target="#dashboard-content"
+                        hx-swap="innerHTML"
+                        hx-on::after-request="updateActiveSidebar(this, '{{.VAID}}')"
+                        class="w-full text-left sidebar-link {{if eq $.ActiveVAID .VAID}}sidebar-link-active{{else}}sidebar-link-inactive{{end}}"
+                        data-va-id="{{.VAID}}"
+                        style="padding: 0.5rem 1rem; border-radius: 0.5rem; font-size: 0.875rem; font-weight: 500; transition: all 0.2s ease; display: flex; align-items: center; gap: 0.75rem; white-space: nowrap;">
+                        <span class="va-initial" style="display: inline-flex; align-items: center; justify-content: center; width: 1.75rem; height: 1.75rem; border-radius: 50%; background-color: var(--nord8); color: var(--nord0); font-weight: 700; font-size: 0.7rem; flex-shrink: 0;">
+                            {{$initials := ""}}
+                            {{range $i, $word := split .VAName " "}}
+                              {{if lt $i 2}}{{$initials = printf "%s%s" $initials (slice $word 0 1)}}{{end}}
+                            {{end}}
+                            {{$initials}}
+                        </span>
+                        <span>{{.VAName}}</span>
+                    </button>
+                </li>
+                {{end}}
+            </ul>
+        </nav>
+
+        <!-- Logout Section -->
+        <div class="h-16 flex items-center px-2 md:h-12" style="border-top: 1px solid var(--nord3); flex-shrink: 0;">
+            <button class="logout-button" disabled title="Logout coming soon" style="width: 100%; padding: 0.5rem 1rem; border-radius: 0.5rem; font-size: 0.875rem; font-weight: 500; opacity: 0.6; cursor: not-allowed; color: var(--nord3); background-color: var(--nord2);">
+                Logout
+            </button>
+        </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="flex-1 flex flex-col">
+        <!-- Header -->
+        <header class="h-16 flex items-center justify-between px-8 md:px-4 md:h-12" style="background-color: var(--nord1); border-bottom: 1px solid var(--nord3); flex-shrink: 0;">
+            <div class="flex-1 flex flex-col justify-center">
+                <h2 class="text-lg font-semibold header-title" style="color: var(--nord6);">{{if .ActiveVA}}{{.ActiveVA.VAName}}{{else}}Dashboard{{end}}</h2>
+                {{if .Username}}<p class="text-sm header-subtitle" style="color: var(--nord4);">Welcome, {{.Username}}</p>{{end}}
+            </div>
+
+            <!-- User Avatar -->
+            {{if .Username}}
+            <div style="display: flex; align-items: center; gap: 1rem; margin-left: 1rem;">
+                <span class="user-avatar" style="display: inline-flex; align-items: center; justify-content: center; width: 2.5rem; height: 2.5rem; border-radius: 50%; background-color: var(--nord9); color: var(--nord0); font-weight: 700; font-size: 0.875rem;">
+                    {{$nameInitials := ""}}
+                    {{range $i, $word := split .Username " "}}
+                      {{if lt $i 2}}{{$nameInitials = printf "%s%s" $nameInitials (slice $word 0 1)}}{{end}}
+                    {{end}}
+                    {{$nameInitials}}
+                </span>
+            </div>
+            {{end}}
+        </header>
+
+        <!-- Content Area -->
+        <div class="flex-1 overflow-auto content-area" style="padding: 2rem;">
+            <div id="dashboard-content" class="max-w-7xl mx-auto">
+                {{block "content" .}}
+                <div class="text-center" style="color: var(--nord4);">
+                    <p>Select a Virtual Airline to get started</p>
+                </div>
+                {{end}}
+            </div>
+        </div>
+    </main>
+
+    <!-- HTMX Helper Script -->
+    <script>
+        function updateActiveSidebar(element, vaId) {
+            // Remove active class from all sidebar buttons
+            document.querySelectorAll('[data-va-id]').forEach(btn => {
+                btn.classList.remove('sidebar-link-active');
+                btn.classList.add('sidebar-link-inactive');
+            });
+            // Add active class to clicked button
+            element.classList.remove('sidebar-link-inactive');
+            element.classList.add('sidebar-link-active');
+        }
+    </script>
+</body>
+</html>

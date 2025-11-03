@@ -1,0 +1,100 @@
+{{define "content"}}
+<style>
+    :root {
+        --nord0: #2E3440;
+        --nord1: #3B4252;
+        --nord2: #434C5E;
+        --nord3: #4C566A;
+        --nord4: #D8DEE9;
+        --nord5: #E5E9F0;
+        --nord6: #ECEFF4;
+        --nord8: #88C0D0;
+    }
+
+    .secondary-nav {
+        display: flex;
+        gap: 1rem;
+        margin-bottom: 2rem;
+        border-bottom: 2px solid var(--nord3);
+        flex-wrap: wrap;
+    }
+
+    .secondary-nav-item {
+        padding: 0.75rem 1.5rem;
+        font-size: 0.95rem;
+        font-weight: 500;
+        color: var(--nord4);
+        text-decoration: none;
+        cursor: pointer;
+        border-bottom: 3px solid transparent;
+        transition: all 0.2s ease;
+        white-space: nowrap;
+    }
+
+    .secondary-nav-item:hover {
+        color: var(--nord6);
+        border-bottom-color: var(--nord8);
+    }
+
+    .secondary-nav-item.active {
+        color: var(--nord8);
+        border-bottom-color: var(--nord8);
+    }
+
+    /* Responsive nav */
+    @media (max-width: 640px) {
+        .secondary-nav {
+            gap: 0.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .secondary-nav-item {
+            padding: 0.5rem 1rem;
+            font-size: 0.85rem;
+        }
+    }
+</style>
+
+<!-- Secondary Navigation -->
+<nav class="secondary-nav">
+    <a href="/dashboard" class="secondary-nav-item active" data-page="dashboard">Dashboard</a>
+
+    {{if or (eq .ActiveVA.Role "admin") (eq .ActiveVA.Role "staff")}}
+    <a href="/dashboard/logbook" class="secondary-nav-item" data-page="logbook">Logbook</a>
+    {{end}}
+
+    {{if eq .ActiveVA.Role "admin"}}
+    <a href="/dashboard/settings" class="secondary-nav-item" data-page="settings" style="opacity: 0.5; cursor: not-allowed;" title="Coming soon">Settings</a>
+    {{end}}
+</nav>
+
+<!-- Dashboard Content -->
+<div class="space-y-6">
+    <!-- Dashboard Grid -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <!-- Placeholder cards for future content -->
+        <div class="rounded-lg p-6" style="background-color: var(--nord1); border: 1px solid var(--nord3);">
+            <h3 class="text-sm font-semibold mb-2" style="color: var(--nord8);">Quick Stats</h3>
+            <div class="text-3xl font-bold" style="color: var(--nord6);">—</div>
+            <p class="text-xs mt-2" style="color: var(--nord4);">Coming soon</p>
+        </div>
+
+        <div class="rounded-lg p-6" style="background-color: var(--nord1); border: 1px solid var(--nord3);">
+            <h3 class="text-sm font-semibold mb-2" style="color: var(--nord8);">Recent Activity</h3>
+            <div class="text-3xl font-bold" style="color: var(--nord6);">—</div>
+            <p class="text-xs mt-2" style="color: var(--nord4);">Coming soon</p>
+        </div>
+
+        <div class="rounded-lg p-6" style="background-color: var(--nord1); border: 1px solid var(--nord3);">
+            <h3 class="text-sm font-semibold mb-2" style="color: var(--nord8);">Flight Hours</h3>
+            <div class="text-3xl font-bold" style="color: var(--nord6);">—</div>
+            <p class="text-xs mt-2" style="color: var(--nord4);">Coming soon</p>
+        </div>
+    </div>
+
+    <!-- Empty State Message -->
+    <div class="rounded-lg p-8 text-center" style="background-color: var(--nord1); border: 1px solid var(--nord3);">
+        <p class="text-lg" style="color: var(--nord4);">Select content from the sidebar or wait for dashboard features to be implemented</p>
+    </div>
+</div>
+{{end}}
