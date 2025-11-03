@@ -6,6 +6,7 @@ import (
 	"infinite-experiment/politburo/internal/common"
 	"infinite-experiment/politburo/internal/models/dtos"
 	"log"
+	"math"
 	"time"
 )
 
@@ -17,6 +18,40 @@ type LogbookRequest struct {
 }
 
 var LogbookQueue = make(chan LogbookRequest, 100)
+
+// getAltitudeColor calculates a hex color based on altitude (green -> yellow -> red gradient)
+// 0 ft = green (#A3BE8C), 22.5k ft = yellow (#EBCB8B), 45k ft = red (#BF616A)
+func getAltitudeColor(altitude int, maxAltitude int) string {
+	if maxAltitude == 0 {
+		maxAltitude = 45000
+	}
+
+	ratio := math.Min(float64(altitude)/float64(maxAltitude), 1.0)
+
+	var r, g, b int
+	if ratio <= 0.5 {
+		// Green to Yellow: interpolate between #A3BE8C and #EBCB8B
+		t := ratio * 2
+		r = int(163 + (235-163)*t)
+		g = int(190 + (203-190)*t)
+		b = int(140 + (139-140)*t)
+	} else {
+		// Yellow to Red: interpolate between #EBCB8B and #BF616A
+		t := (ratio - 0.5) * 2
+		r = int(235 + (191-235)*t)
+		g = int(203 + (97-203)*t)
+		b = int(139 + (106-139)*t)
+	}
+
+	return fmt.Sprintf("#%02X%02X%02X", r, g, b)
+}
+
+// formatDuration converts seconds to HH:MM format
+func formatDuration(seconds int) string {
+	hours := seconds / 3600
+	mins := (seconds % 3600) / 60
+	return fmt.Sprintf("%02d:%02d", hours, mins)
+}
 
 func LogbookWorker(cache common.CacheInterface, liveApiService *common.LiveAPIService, liverySvc *common.AircraftLiveryService) {
 	log.Printf("[DEBUG] LogbookWorker started, queue_addr=%p", LogbookQueue)
@@ -108,9 +143,10 @@ func LogbookWorker(cache common.CacheInterface, liveApiService *common.LiveAPISe
 				Duration:   hours*60 + minutes,
 				StartedAt:  req.Flight.Created,
 			},
-			Route:  waypoints,
-			Origin: originNode,
-			Dest:   destNode,
+			Route:     waypoints,
+			Origin:    originNode,
+			Dest:      destNode,
+			SessionID: req.SessionId, // ← Include session ID
 		}
 
 		// Cache for 7 days (604800 seconds)

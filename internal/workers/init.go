@@ -26,8 +26,8 @@ func InitWorkers(
 ) *WorkersContainer {
 	mcf := NewMetaCacheFiller(c, api, liveryRepo, liverySvc)
 
-	// Deprecated
-	//go LogbookWorker(legacyCacheSvc, liveSvc, deps.Services.AircraftLivery)
+	// Start the logbook worker to cache flight routes on-demand
+	go LogbookWorker(*c, api, liverySvc)
 
 	qWorker := NewPirepQueueWorker("pirep_queue", db, redQ, dataProvCfg, pirepSyncedRepo, vaSyncHRepo)
 	monitor := NewPirepQueueMonitor(db, redQ)

@@ -26,6 +26,7 @@ type Repositories struct {
 	PirepATSynced         *repositories.PirepATSyncedRepo
 	AircraftLivery        *repositories.AircraftLiveryRepository
 	LiveryAirtableMapping *repositories.LiveryAirtableMappingRepository
+	AirportsRepo          *repositories.AirportRepository
 }
 
 type Services struct {
@@ -45,6 +46,8 @@ type Services struct {
 	DataProviderConfig *services.DataProviderConfigService
 	AircraftLivery     *common.AircraftLiveryService
 	RedisQueue         common.RedisQueueService
+	URLSigner          *common.URLSignerService
+	Session            *common.SessionService
 }
 type Dependencies struct {
 	Repo     *Repositories
@@ -67,6 +70,7 @@ func InitDependencies() (*Dependencies, error) {
 		PirepATSynced:         repositories.NewPirepATSyncedRepo(db.PgDB),
 		AircraftLivery:        repositories.NewAircraftLiveryRepository(db.PgDB),
 		LiveryAirtableMapping: repositories.NewLiveryAirtableMappingRepository(db.PgDB),
+		AirportsRepo:          repositories.NewAirportRepository(db.PgDB),
 	}
 
 	// Initialize cache service (Redis or in-memory based on USE_REDIS_CACHE env var)
@@ -131,6 +135,16 @@ func InitDependencies() (*Dependencies, error) {
 	// Initialize Airtable provider
 	airtableProvider := providers.NewAirtableProvider(cacheSvc)
 
+	// Initialize URL Signer service for presigned dashboard links
+	jwtSecret := []byte(os.Getenv("JWT_SECRET"))
+	if len(jwtSecret) == 0 {
+		jwtSecret = []byte("dev-secret-change-in-production")
+	}
+	urlSignerSvc := common.NewURLSignerService(jwtSecret, redisClient)
+
+	// Initialize session service for UI authentication
+	sessionSvc := common.NewSessionService(redisClient)
+
 	svc := &Services{
 		User:               userSvc,
 		Reg:                *services.NewRegistrationService(liveSvc, *legacyCache, repositories.User, repositories.Va),
@@ -148,6 +162,8 @@ func InitDependencies() (*Dependencies, error) {
 		LegacyCache:        legacyCache,
 		Live:               *liveSvc,
 		RedisQueue:         redisQSvc,
+		URLSigner:          urlSignerSvc,
+		Session:            sessionSvc,
 	}
 
 	return &Dependencies{

@@ -23,6 +23,7 @@ type RouteSyncJob struct {
 	configRepo        *repositories.DataProviderConfigRepo
 	syncHistoryRepo   *repositories.VASyncHistoryRepo
 	routeATSyncedRepo *repositories.RouteATSyncedRepo
+	airportRepo       *repositories.AirportRepository
 	airtableProvider  *providers.AirtableProvider
 }
 
@@ -33,6 +34,7 @@ func NewRouteSyncJob(
 	configRepo *repositories.DataProviderConfigRepo,
 	syncHistoryRepo *repositories.VASyncHistoryRepo,
 	routeATSyncedRepo *repositories.RouteATSyncedRepo,
+	airportRepo *repositories.AirportRepository,
 ) *RouteSyncJob {
 	return &RouteSyncJob{
 		db:                db,
@@ -40,6 +42,7 @@ func NewRouteSyncJob(
 		configRepo:        configRepo,
 		syncHistoryRepo:   syncHistoryRepo,
 		routeATSyncedRepo: routeATSyncedRepo,
+		airportRepo:       airportRepo,
 		airtableProvider:  providers.NewAirtableProvider(cache),
 	}
 }
@@ -261,19 +264,77 @@ func (j *RouteSyncJob) upsertRoute(ctx context.Context, vaID string, airtableRec
 		Route:       route,
 	}
 
+	// Parse route field to extract ICAO codes and enrich with airport coordinates
+	j.enrichRouteWithAirportData(ctx, routeATSynced)
+
 	// Upsert into route_at_synced table
 	if err := j.routeATSyncedRepo.Upsert(ctx, routeATSynced); err != nil {
 		return fmt.Errorf("failed to upsert route: %w", err)
 	}
 
-	// Log with route as primary identifier
-	if origin != "" && destination != "" {
-		log.Printf("[RouteSyncJob] Upserted route '%s' (%s → %s) (record: %s)", route, origin, destination, airtableRecordID)
+	// Log with route as primary identifier and coordinates if available
+	var logMsg string
+	if routeATSynced.OriginLat.Valid && routeATSynced.DestinationLat.Valid {
+		logMsg = fmt.Sprintf("[RouteSyncJob] Upserted route '%s' with coordinates: origin (%.4f, %.4f) dest (%.4f, %.4f) (record: %s)",
+			route, routeATSynced.OriginLat.Float64, routeATSynced.OriginLon.Float64,
+			routeATSynced.DestinationLat.Float64, routeATSynced.DestinationLon.Float64, airtableRecordID)
+	} else if origin != "" && destination != "" {
+		logMsg = fmt.Sprintf("[RouteSyncJob] Upserted route '%s' (%s → %s) (no airport data found) (record: %s)",
+			route, origin, destination, airtableRecordID)
 	} else {
-		log.Printf("[RouteSyncJob] Upserted route '%s' (event/special) (record: %s)", route, airtableRecordID)
+		logMsg = fmt.Sprintf("[RouteSyncJob] Upserted route '%s' (event/special) (record: %s)", route, airtableRecordID)
 	}
+	log.Print(logMsg)
 
 	return nil
+}
+
+// enrichRouteWithAirportData parses the route field (format: KJFK-EGLL) and enriches with airport coordinates
+func (j *RouteSyncJob) enrichRouteWithAirportData(ctx context.Context, routeATSynced *gormModels.RouteATSynced) {
+	if routeATSynced.Route == "" {
+		return
+	}
+
+	// Parse route field on "-" separator
+	parts := strings.Split(routeATSynced.Route, "-")
+	if len(parts) != 2 {
+		// Route doesn't match expected format, skip gracefully
+		log.Printf("[RouteSyncJob] Route '%s' does not match ICAO-ICAO format, skipping airport enrichment", routeATSynced.Route)
+		return
+	}
+
+	originICAO := strings.TrimSpace(parts[0])
+	destICAO := strings.TrimSpace(parts[1])
+
+	// Look up origin airport
+	if originICAO != "" {
+		if origin, err := j.airportRepo.FindByICAO(ctx, originICAO); err != nil {
+			log.Printf("[RouteSyncJob] Error looking up origin airport %s: %v", originICAO, err)
+		} else if origin != nil {
+			routeATSynced.OriginLat.Float64 = origin.Latitude
+			routeATSynced.OriginLat.Valid = true
+			routeATSynced.OriginLon.Float64 = origin.Longitude
+			routeATSynced.OriginLon.Valid = true
+		} else {
+			// Origin airport not found
+			log.Printf("[RouteSyncJob] Origin airport %s not found in database", originICAO)
+		}
+	}
+
+	// Look up destination airport
+	if destICAO != "" {
+		if dest, err := j.airportRepo.FindByICAO(ctx, destICAO); err != nil {
+			log.Printf("[RouteSyncJob] Error looking up destination airport %s: %v", destICAO, err)
+		} else if dest != nil {
+			routeATSynced.DestinationLat.Float64 = dest.Latitude
+			routeATSynced.DestinationLat.Valid = true
+			routeATSynced.DestinationLon.Float64 = dest.Longitude
+			routeATSynced.DestinationLon.Valid = true
+		} else {
+			// Destination airport not found
+			log.Printf("[RouteSyncJob] Destination airport %s not found in database", destICAO)
+		}
+	}
 }
 
 // getLastSyncTimestamp gets the most recent sync timestamp for this VA from sync history

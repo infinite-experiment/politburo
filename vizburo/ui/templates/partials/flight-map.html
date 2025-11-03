@@ -1,0 +1,286 @@
+{{define "content"}}
+<style>
+  :root {
+    --nord0: #2E3440;
+    --nord1: #3B4252;
+    --nord2: #434C5E;
+    --nord3: #4C566A;
+    --nord4: #D8DEE9;
+    --nord5: #E5E9F0;
+    --nord6: #ECEFF4;
+    --nord8: #88C0D0;
+    --nord14: #A3BE8C;
+  }
+
+  #gleo-map-wrapper {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+  }
+
+  #gleo-map {
+    width: 100%;
+    flex: 1;
+    display: block;
+    position: relative;
+    min-height: 400px;
+  }
+
+  /* Altitude gradient legend */
+  #altitude-legend {
+    position: absolute;
+    bottom-right: 1rem;
+    top: auto;
+    right: 1rem;
+    background: rgba(46, 52, 64, 0.95);
+    border: 1px solid var(--nord3);
+    border-radius: 0.375rem;
+    padding: 0.75rem;
+    font-size: 0.75rem;
+    color: var(--nord4);
+    z-index: 10;
+    width: 180px;
+  }
+
+  #altitude-legend .legend-title {
+    font-weight: 600;
+    color: var(--nord8);
+    margin-bottom: 0.5rem;
+    text-align: center;
+  }
+
+  #altitude-legend .legend-bar {
+    width: 100%;
+    height: 20px;
+    background: linear-gradient(to right, #A3BE8C, #EBCB8B, #BF616A);
+    border-radius: 0.25rem;
+    margin-bottom: 0.5rem;
+  }
+
+  #altitude-legend .legend-labels {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.65rem;
+    color: var(--nord4);
+  }
+</style>
+
+<div id="gleo-map-wrapper">
+  <div id="gleo-map"></div>
+
+  <!-- Altitude gradient legend -->
+  <div id="altitude-legend">
+    <div class="legend-title">Altitude</div>
+    <div class="legend-bar"></div>
+    <div class="legend-labels">
+      <span>0 ft</span>
+      <span>22.5k ft</span>
+      <span>45k ft</span>
+    </div>
+  </div>
+
+  <!-- Flight details overlay (bottom-right) -->
+  <div class="absolute bottom-4 right-4 px-4 py-3 rounded-lg text-sm backdrop-blur-sm"
+       style="background: rgba(59, 66, 82, 0.95); border: 1px solid var(--nord3);">
+    <h3 class="font-semibold mb-2" style="color: var(--nord8);">
+      {{.Origin.Name}} → {{.Dest.Name}}
+    </h3>
+    <div class="space-y-1" style="color: var(--nord4);">
+      <div>Aircraft: <span style="color: var(--nord6);">{{.Meta.Aircraft}}</span></div>
+      <div>Duration: <span style="color: var(--nord6);">{{.Meta.Duration}} secs</span></div>
+      <div>Max Speed: <span style="color: var(--nord6);">{{.Meta.MaxSpeed}} kts</span></div>
+      <div>Max Alt: <span style="color: var(--nord6);">{{.Meta.MaxAlt}} ft</span></div>
+      <div>Landings: <span style="color: var(--nord6);">{{.Meta.Landings}}</span></div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // Store route data in window so the async module can access it
+  // Convert string coordinates to numbers for Gleo and include altitude data
+  window.flightMapData = {
+    route: [
+      {{range .Path}}[parseFloat("{{.Lat}}"), parseFloat("{{.Long}}")],{{end}}
+    ],
+    altitudes: [
+      {{range .Path}}{{.Altitude}},{{end}}
+    ],
+    originName: "{{.Origin.Name}}",
+    destName: "{{.Dest.Name}}"
+  };
+
+  // Helper function to interpolate color based on altitude
+  function getAltitudeColor(altitude, maxAltitude = 45000) {
+    const ratio = Math.min(Math.max(altitude / maxAltitude, 0), 1.0);
+
+    // Green -> Yellow -> Red gradient
+    // 0-0.5: green to yellow
+    // 0.5-1.0: yellow to red
+    let r, g, b;
+
+    if (ratio <= 0.5) {
+      // Green (#A3BE8C) to Yellow (#EBCB8B)
+      const t = ratio * 2;
+      r = Math.round(163 + (235 - 163) * t);
+      g = Math.round(190 + (203 - 190) * t);
+      b = Math.round(140 + (139 - 140) * t);
+    } else {
+      // Yellow (#EBCB8B) to Red (#BF616A)
+      const t = (ratio - 0.5) * 2;
+      r = Math.round(235 + (191 - 235) * t);
+      g = Math.round(203 + (97 - 203) * t);
+      b = Math.round(139 + (106 - 139) * t);
+    }
+
+    const hexColor = `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`.toUpperCase();
+    return hexColor;
+  }
+
+  // Load Gleo library and initialize map
+  async function initializeMap() {
+    try {
+      // Wait for map container to be visible and have dimensions
+      const mapContainer = document.getElementById('gleo-map');
+      const maxRetries = 50;
+      let retries = 0;
+
+      while ((!mapContainer.offsetWidth || !mapContainer.offsetHeight) && retries < maxRetries) {
+        await new Promise(resolve => setTimeout(resolve, 10));
+        retries++;
+      }
+
+      if (!mapContainer.offsetWidth || !mapContainer.offsetHeight) {
+        console.warn('Map container has no dimensions after waiting');
+      }
+
+      const gleoBase = "/static/js/gleo/";
+      const { default: MercatorMap } = await import(gleoBase + "MercatorMap.mjs");
+      const { default: MercatorTiles } = await import(gleoBase + "loaders/MercatorTiles.mjs");
+      const { default: Chain } = await import(gleoBase + "symbols/Chain.mjs");
+      const { default: Circle } = await import(gleoBase + "symbols/Circle.mjs");
+      const { default: TextLabel } = await import(gleoBase + "symbols/TextLabel.mjs");
+
+      const route = window.flightMapData.route;
+      const altitudes = window.flightMapData.altitudes;
+
+      if (route.length === 0) {
+        mapContainer.innerHTML =
+          '<div class="flex items-center justify-center h-full" style="color: var(--nord4);">No route data available</div>';
+        return;
+      }
+
+      // Debug: Log altitude data
+      console.log(`Route length: ${route.length}, Altitudes length: ${altitudes.length}`);
+      console.log(`First 5 altitudes:`, altitudes.slice(0, 5));
+      console.log(`Max altitude: ${Math.max(...altitudes)} ft`);
+      console.log(`Min altitude: ${Math.min(...altitudes)} ft`);
+
+      // Calculate map bounds and center
+      const lats = route.map(p => parseFloat(p[0]));
+      const lngs = route.map(p => parseFloat(p[1]));
+      const minLat = Math.min(...lats);
+      const maxLat = Math.max(...lats);
+      const minLng = Math.min(...lngs);
+      const maxLng = Math.max(...lngs);
+
+      const centerLat = (minLat + maxLat) / 2;
+      const centerLng = (minLng + maxLng) / 2;
+
+      // Calculate span with 20% padding
+      const spanLat = (maxLat - minLat) * 111000;
+      const spanLng = (maxLng - minLng) * 111000 * Math.cos((centerLat * Math.PI) / 180);
+      const span = Math.max(spanLat, spanLng) * 1.2;
+
+      // Initialize map
+      const map = new MercatorMap("gleo-map", {
+        center: [centerLat, centerLng],
+        span: span || 1000000,
+        maxSpan: 14e6,
+      });
+
+      // Add OSM tiles
+      new MercatorTiles("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        attribution: "© OpenStreetMap contributors"
+      }).addTo(map);
+
+      // Draw flight path with altitude-based gradient coloring
+      // Create segments between consecutive points, each colored by the starting point's altitude
+      // Also interpolate altitudes for smoother segment coloring
+      for (let i = 0; i < route.length - 1; i++) {
+        const segmentRoute = [route[i], route[i + 1]];
+
+        // Use the current altitude, or interpolate if next is available
+        let segmentAltitude = altitudes[i] || 0;
+        if (i + 1 < altitudes.length) {
+          segmentAltitude = (altitudes[i] + altitudes[i + 1]) / 2;
+        }
+
+        const color = getAltitudeColor(segmentAltitude);
+
+        // Log every 20th segment for debugging
+        if (i % 20 === 0) {
+          console.log(`Segment ${i}: altitude=${segmentAltitude.toFixed(0)} ft, color=${color}`);
+        }
+
+        new Chain(segmentRoute, {
+          colour: color,
+          width: 3
+        }).addTo(map);
+      }
+
+      // Start marker (Nord14 green #A3BE8C)
+      new Circle(route[0], {
+        size: 8,
+        colour: "#A3BE8C"
+      }).addTo(map);
+
+      // Start label with offset (Nord6 - light gray text with dark outline)
+      // Offset by [0.5, -0.3] degrees (roughly 55km east, 33km north)
+      const originLabelPos = [route[0][0] - 0.3, route[0][1] + 0.5];
+      new TextLabel(originLabelPos, {
+        str: window.flightMapData.originName,
+        colour: "#ECEFF4",
+        font: "12px bold Sans",
+        align: "center",
+        baseline: "middle",
+        outlineWidth: 2,
+        outlineColour: "#2E3440"
+      }).addTo(map);
+
+      // End marker (Nord11 red #BF616A)
+      const lastIdx = route.length - 1;
+      new Circle(route[lastIdx], {
+        size: 8,
+        colour: "#BF616A"
+      }).addTo(map);
+
+      // End label with offset (Nord6 - light gray text with dark outline)
+      // Offset by [-0.5, 0.3] degrees (roughly 55km west, 33km south)
+      const destLabelPos = [route[lastIdx][0] + 0.3, route[lastIdx][1] - 0.5];
+      new TextLabel(destLabelPos, {
+        str: window.flightMapData.destName,
+        colour: "#ECEFF4",
+        font: "12px bold Sans",
+        align: "center",
+        baseline: "middle",
+        outlineWidth: 2,
+        outlineColour: "#2E3440"
+      }).addTo(map);
+    } catch (error) {
+      console.error("Error rendering flight map:", error);
+      console.error("Stack trace:", error.stack);
+      const mapContainer = document.getElementById('gleo-map');
+      mapContainer.innerHTML =
+        '<div class="flex items-center justify-center h-full" style="color: var(--nord11);">Error loading map: ' + error.message + '</div>';
+    }
+  }
+
+  // Initialize map when script loads
+  // Use a small delay to ensure DOM is fully settled
+  setTimeout(() => {
+    initializeMap();
+  }, 50);
+</script>
+{{end}}

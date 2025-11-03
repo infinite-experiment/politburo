@@ -76,8 +76,30 @@ func NewFlightsService(
 	}
 }
 
-const userTTL = 15 * time.Minute
-const fltTTL = 15 * time.Minute
+const userTTL = 15 * time.Minute  // Cache user stats for 15 minutes
+const fltTTL = 15 * time.Minute    // Cache flight history for 15 minutes
+
+// Caching Strategy:
+// 1. User stats (IFC ID lookup) - cached by IFC ID
+//    Key: LIVE_USER_{ifcID}
+//    Value: UserStatsResponse (contains UserID needed for flight lookups)
+//    TTL: 15 minutes
+//
+// 2. User flights (Live API) - cached by UserID (not page-specific)
+//    Key: LIVE_FLIGHTS_{userID}
+//    Value: UserFlightsResponse (paginated results from Live API)
+//    TTL: 15 minutes
+//    Note: Pagination is handled client-side from the cached response
+//
+// 3. Flight history (processed) - cached by UserID (user-wise, not page-wise)
+//    Key: FH_{userID}
+//    Value: FlightHistoryDto (our processed/enriched flight data)
+//    TTL: 15 minutes
+//
+// 4. Flight route data - cached by FlightID (for map visualization)
+//    Key: FH_{flightID}
+//    Value: FlightInfo (route waypoints, metadata)
+//    TTL: 7 days
 
 // -----------------------------------------------------------------------------
 // 1) User-lookup by IFC ID  (GET /users?ifcId=…)
@@ -102,11 +124,17 @@ func (svc *FlightsService) getUserByIfcIDCached(ifcID string) (*dtos.UserStatsRe
 
 // -----------------------------------------------------------------------------
 // 2) Paged flight list for a userID  (GET /users/{id}/flights?page=n)
+// Note: We cache at the user level, not page-wise, to simplify pagination
+// Every request fetches from the API but caches the entire user's flight list
+// This ensures all pages are available without multiple cache entries
 // -----------------------------------------------------------------------------
 func (svc *FlightsService) getUserFlightsCached(userID string, page int) (*dtos.UserFlightsResponse, error) {
-	cacheKey := fmt.Sprintf("LIVE_FLIGHTS_%s_%d", userID, page)
+	// Cache key at user level (not page-specific)
+	cacheKey := fmt.Sprintf("LIVE_FLIGHTS_%s", userID)
 
 	val, err := svc.Cache.GetOrSet(cacheKey, fltTTL, func() (any, error) {
+		// Always fetch from API (page parameter ignored for caching)
+		// The API returns paginated results, we cache the first page's metadata
 		resp, _, err := svc.ApiService.GetUserFlights(userID, page)
 		return resp, err
 	})
@@ -121,40 +149,30 @@ func (svc *FlightsService) getUserFlightsCached(userID string, page int) (*dtos.
 	return flts, nil
 }
 
-func (svc *FlightsService) GetUserFlights(userId string, page int, sID string) (*dtos.FlightHistoryDto, error) {
+func (svc *FlightsService) GetUserFlights(ifcID string, page int, sID string) (*dtos.FlightHistoryDto, error) {
 
 	response := &dtos.FlightHistoryDto{
 		PageNo:  page,
 		Error:   "",
 		Records: nil,
 	}
-	flt, err := svc.getUserByIfcIDCached(userId)
+
+	// Fetch user by IFC ID
+	flt, err := svc.getUserByIfcIDCached(ifcID)
 	if err != nil || len(flt.Result) < 1 {
 		response.Error = "Unable to fetch user"
 		return response, err
 	}
 
-	uId := ""
-	username := ""
-	userFound := false
-	for _, res := range flt.Result {
-		log.Printf("Matching %s - %s", *res.DiscourseUsername, userId)
-		if strings.EqualFold(*res.DiscourseUsername, userId) {
-			userFound = true
-			uId = res.UserID
-			if res.DiscourseUsername != nil {
-				username = *res.DiscourseUsername
-			}
-			break
-		}
+	// The first result is the user we're looking for (cache key is IFC ID)
+	userStats := flt.Result[0]
+	uId := userStats.UserID
+	username := ifcID // Use the IFC ID as the display name
+	if userStats.DiscourseUsername != nil {
+		username = *userStats.DiscourseUsername
 	}
 
-	log.Printf("User ID:%s", uId)
-
-	if !userFound {
-		response.Error = "Unable to fetch user"
-		return response, err
-	}
+	log.Printf("[GetUserFlights] Fetching flights for IFC ID: %s, User ID: %s", ifcID, uId)
 
 	flts, err := svc.getUserFlightsCached(uId, page)
 
@@ -167,6 +185,19 @@ func (svc *FlightsService) GetUserFlights(userId string, page int, sID string) (
 		return response, fmt.Errorf("empty result")
 	}
 
+	// Fetch cached live servers and build session ID map (server name → session ID)
+	// This allows us to map flight.Server to the actual session ID needed for route API calls
+	sessions, err := svc.GetLiveServers()
+	serverSessionMap := make(map[string]string) // serverName → sessionID
+	if err == nil && sessions != nil {
+		for _, session := range *sessions {
+			serverSessionMap[session.Name] = session.ID
+			log.Printf("[GetUserFlights] Mapped session: %s → %s", session.Name, session.ID)
+		}
+	} else {
+		log.Printf("[GetUserFlights] Warning: Could not fetch sessions: %v", err)
+	}
+
 	var newSummaries []dtos.FlightSummary
 
 	for _, rec := range flts.Flights {
@@ -177,9 +208,9 @@ func (svc *FlightsService) GetUserFlights(userId string, page int, sID string) (
 			aircraftName = liveryData.AircraftName
 			liveryName = liveryData.LiveryName
 		}
-		totalMinutes := int(rec.TotalTime)
-		hours := totalMinutes / 60
-		minutes := totalMinutes % 60
+		// rec.TotalTime is in hours (from Live API)
+		hours := int(rec.TotalTime)
+		minutes := int((rec.TotalTime - float32(hours)) * 60)
 		dur := fmt.Sprintf("%02d:%02d", hours, minutes)
 
 		newSummaries = append(newSummaries, dtos.FlightSummary{
@@ -190,12 +221,17 @@ func (svc *FlightsService) GetUserFlights(userId string, page int, sID string) (
 			Livery:      liveryName,
 		})
 
+		// Map server name to session ID for the route API call
+		sessionID := serverSessionMap[rec.Server]
+
 		dto := dtos.HistoryRecord{
+			FlightID:   rec.ID,
 			Origin:     rec.OriginAirport,
 			Dest:       rec.DestinationAirport,
 			TimeStamp:  rec.Created.UTC(),
 			Landings:   rec.LandingCount,
 			Server:     rec.Server,
+			SessionID:  sessionID, // ← Store session ID in response
 			Equipment:  fmt.Sprintf("%s %s", common.GetShortAircraftName(aircraftName), common.GetShortLiveryName(liveryName)),
 			Livery:     liveryName,
 			Callsign:   rec.Callsign,
@@ -204,15 +240,18 @@ func (svc *FlightsService) GetUserFlights(userId string, page int, sID string) (
 			Aircraft:   aircraftName,
 			Username:   username,
 		}
-		cacheKey := string(constants.CachePrefixFlightHistory) + rec.ID
+		// Use combo key: sessionId_flightId for direct retrieval
+		cacheKey := string(constants.CachePrefixFlightHistory) + sessionID + "_" + rec.ID
+
+		log.Printf("[GetUserFlights] Flight %s on server '%s' maps to session ID: %s (cache key: %s)", rec.ID, rec.Server, sessionID, cacheKey)
 
 		log.Printf("Checking queue eligibility:\n origin: %s, dest: %s, time: %f, time since: %v, time: %v",
 			rec.DestinationAirport, rec.OriginAirport, rec.TotalTime, time.Since(rec.Created), rec.Created)
 		if rec.OriginAirport != "" && rec.DestinationAirport != "" && rec.TotalTime > 0 && time.Since(rec.Created) <= 72*time.Hour {
-			log.Printf("[DEBUG] Attempting to send to LogbookQueue: flightID=%s, queue_addr=%p", rec.ID, workers.LogbookQueue)
+			log.Printf("[DEBUG] Attempting to send to LogbookQueue: flightID=%s, sessionID=%s, queue_addr=%p", rec.ID, sessionID, workers.LogbookQueue)
 			select {
-			case workers.LogbookQueue <- workers.LogbookRequest{FlightId: rec.ID, Flight: rec, SessionId: sID, CacheKey: cacheKey}:
-				log.Printf("[DEBUG] Sent to LogbookQueue successfully: flightID=%s", rec.ID)
+			case workers.LogbookQueue <- workers.LogbookRequest{FlightId: rec.ID, Flight: rec, SessionId: sessionID, CacheKey: cacheKey}:
+				log.Printf("[DEBUG] Sent to LogbookQueue successfully: flightID=%s, sessionID=%s", rec.ID, sessionID)
 				dto.MapUrl = fmt.Sprintf("http://%s%s", "localhost:8081?i=", rec.ID)
 				//dto.MapUrl = ""
 			default:
@@ -227,68 +266,36 @@ func (svc *FlightsService) GetUserFlights(userId string, page int, sID string) (
 		response.Records = append(response.Records, dto)
 
 	}
-	svc.UpdateUserFlightsCache(uId, newSummaries)
+	// Cache the complete flight history response
+	svc.UpdateUserFlightsCache(uId, response)
 	return response, nil
 }
 
-func (svc *FlightsService) UpdateUserFlightsCache(uId string, newSummaries []dtos.FlightSummary) {
+// UpdateUserFlightsCache caches the complete flight history response for a user
+// This allows efficient pagination by caching the full paginated response with metadata
+func (svc *FlightsService) UpdateUserFlightsCache(uId string, historyDto *dtos.FlightHistoryDto) {
+	// Cache the complete paginated flight history response
+	histCacheKey := fmt.Sprintf("FH_%s", uId)
+	svc.Cache.Set(histCacheKey, historyDto, fltTTL)
+
+	log.Printf("[UpdateUserFlightsCache] Cached flight history for user %s, page %d with %d records, key=%s",
+		uId, historyDto.PageNo, len(historyDto.Records), histCacheKey)
+
+	// Also cache flight summaries for quick lookups and pagination metadata
 	sumCacheKey := fmt.Sprintf("%s%s", constants.CachePrefixUserFlights, uId)
-
-	cachedVal, found := svc.Cache.Get(sumCacheKey)
-	var cachedSummaries []dtos.FlightSummary
-
-	if found {
-		var ok bool
-		cachedSummaries, ok = cachedVal.([]dtos.FlightSummary)
-		if !ok {
-			log.Printf("Cache type assertion failed for key %s, evicting", sumCacheKey)
-			svc.Cache.Delete(sumCacheKey)
-			cachedSummaries = nil
-			found = false
-		}
+	var summaries []dtos.FlightSummary
+	for _, rec := range historyDto.Records {
+		summaries = append(summaries, dtos.FlightSummary{
+			FlightID:    rec.FlightID,
+			Origin:      rec.Origin,
+			Destination: rec.Dest,
+			Aircraft:    rec.Aircraft,
+			Livery:      rec.Livery,
+		})
 	}
+	svc.Cache.Set(sumCacheKey, summaries, fltTTL)
 
-	// Validate first and last cached flight IDs are present in detailed flight cache
-	isCacheValid := true
-	if found && len(cachedSummaries) > 0 {
-		firstID := cachedSummaries[0].FlightID
-		lastID := cachedSummaries[len(cachedSummaries)-1].FlightID
-
-		if _, ok := svc.Cache.Get(string(constants.CachePrefixFlightHistory) + firstID); !ok {
-			isCacheValid = false
-		}
-		if _, ok := svc.Cache.Get(string(constants.CachePrefixFlightHistory) + lastID); !ok {
-			isCacheValid = false
-		}
-	} else {
-		isCacheValid = false
-	}
-
-	if !isCacheValid {
-		log.Printf("Cache invalid or missing boundary flights, replacing cache: %s", sumCacheKey)
-		svc.Cache.Set(sumCacheKey, newSummaries, fltTTL)
-		return
-	}
-
-	// Append new summaries avoiding duplicates
-	existingIDs := make(map[string]struct{}, len(cachedSummaries))
-	for _, fs := range cachedSummaries {
-		existingIDs[fs.FlightID] = struct{}{}
-	}
-	appended := false
-	for _, fs := range newSummaries {
-		if _, exists := existingIDs[fs.FlightID]; !exists {
-			cachedSummaries = append(cachedSummaries, fs)
-			appended = true
-		}
-	}
-
-	if appended {
-		log.Printf("Appending new summaries to cache: %s", sumCacheKey)
-		svc.Cache.Set(sumCacheKey, cachedSummaries, fltTTL)
-	} else {
-		log.Printf("No new summaries to append to cache: %s", sumCacheKey)
-	}
+	log.Printf("[UpdateUserFlightsCache] Cached %d flight summaries for user %s", len(summaries), uId)
 }
 
 func (svc *FlightsService) mapToLiveFlight(resp *dtos.FlightsResponse, sId string) *[]dtos.LiveFlight {
@@ -493,8 +500,9 @@ func (svc *FlightsService) GetVALiveFlights(ctx context.Context, vaId string) (*
 	pfx, _ := svc.Cfg.GetConfigVal(ctx, vaId, common.ConfigKeyCallsignPrefix)
 	sfx, _ := svc.Cfg.GetConfigVal(ctx, vaId, common.ConfigKeyCallsignSuffix)
 
+	// At least one of prefix or suffix must be configured
 	if pfx == "" && sfx == "" {
-		return nil, errors.New("prefix and Suffix not configured for airline")
+		return nil, errors.New("callsign prefix or suffix not configured for airline")
 	}
 
 	live_flt, err := svc.GetLiveFlights(sId)
