@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"net/http"
+	"os"
 	"time"
 
 	"infinite-experiment/politburo/internal/auth"
@@ -40,11 +41,29 @@ func (h *Handlers) GenerateDashboardLinkHandler() http.HandlerFunc {
 			return
 		}
 
+		// Get the UI base URL from environment, fallback to current host
+		uiBaseURL := os.Getenv("UI_BASE_URL")
+		if uiBaseURL == "" {
+			// Fallback: construct from request headers
+			scheme := r.Header.Get("X-Forwarded-Proto")
+			if scheme == "" {
+				scheme = "http"
+				if r.TLS != nil {
+					scheme = "https"
+				}
+			}
+			forwardedHost := r.Header.Get("X-Forwarded-Host")
+			if forwardedHost == "" {
+				forwardedHost = r.Host
+			}
+			uiBaseURL = scheme + "://" + forwardedHost
+		}
+
 		// Create response
 		response := map[string]interface{}{
 			"status": true,
 			"data": map[string]interface{}{
-				"url":        r.Host + "/auth/login?token=" + token,
+				"url":        uiBaseURL + "/auth/login?token=" + token,
 				"expires_in": 900,
 			},
 		}
