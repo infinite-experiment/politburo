@@ -199,13 +199,21 @@ type HistoryRecord struct {
 	Violations int       `json:"violations"`
 	Equipment  string    `json:"equipment"`
 	Duration   string    `json:"duration"`
+	DayTime    float32   `json:"dayTime"`    // Day flight time in minutes
+	NightTime  float32   `json:"nightTime"`  // Night flight time in minutes
+	XP         int       `json:"xp"`         // Experience points earned
+	WorldType  int       `json:"worldType"`  // 1=Casual, 2=Training, 3=Expert
 	Username   string    `json:"username"`
 }
 
 type FlightHistoryDto struct {
-	PageNo  int             `json:"page"`
-	Records []HistoryRecord `json:"records"`
-	Error   string          `json:"error"`
+	PageNo      int             `json:"page"`
+	Records     []HistoryRecord `json:"records"`
+	Error       string          `json:"error"`
+	HasNext     bool            `json:"hasNext"`
+	HasPrevious bool            `json:"hasPrevious"`
+	TotalPages  int             `json:"totalPages"`
+	TotalCount  int             `json:"totalCount"`
 }
 
 type SessionsResponse struct {

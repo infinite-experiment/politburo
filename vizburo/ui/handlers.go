@@ -8,6 +8,7 @@ import (
 	"infinite-experiment/politburo/internal/db/repositories"
 	"infinite-experiment/politburo/internal/models/dtos"
 	"infinite-experiment/politburo/internal/services"
+	"log"
 	"net/http"
 	"os"
 	"strconv"
@@ -170,16 +171,14 @@ func LogbookFlightsHandler(
 	}
 
 	// Prepare template data with pagination
-	// The flightHistory.Records contains the flights for the current page
-	// We need to determine if there are more pages based on the record count
-	const recordsPerPage = 20
-	hasMore := len(flightHistory.Records) == recordsPerPage // If we got a full page, there might be more
-
+	// Use pagination metadata from the Live API response
 	data := map[string]interface{}{
 		"Flights":     flightHistory.Records,
 		"PageNo":      page,
-		"HasNext":     hasMore,
-		"HasPrevious": page > 1,
+		"HasNext":     flightHistory.HasNext,
+		"HasPrevious": flightHistory.HasPrevious,
+		"TotalPages":  flightHistory.TotalPages,
+		"TotalCount":  flightHistory.TotalCount,
 		"NextPage":    page + 1,
 		"PrevPage":    page - 1,
 		"UserID":      userID,
@@ -198,6 +197,7 @@ func FlightMapHandler(
 	r *http.Request,
 	cache common.CacheInterface,
 	liveAPI *common.LiveAPIService,
+	flightSvc *services.FlightsService,
 ) {
 	// Get user claims
 	claims := auth.GetUserClaims(r.Context())
@@ -225,6 +225,38 @@ func FlightMapHandler(
 		return
 	}
 
+	// Get page from query params for metadata lookup (optional, defaults to 1)
+	pageStr := r.URL.Query().Get("page")
+	page := 1
+	if pageStr != "" {
+		if p, err := strconv.Atoi(pageStr); err == nil && p > 0 {
+			page = p
+		}
+	}
+
+	// Get IFC ID (username) from query params to look up actual IF user ID
+	ifcID := r.URL.Query().Get("user_id")
+	if ifcID == "" {
+		log.Printf("[FlightMapHandler] Warning: user_id (IFC ID) not provided, cannot fetch metadata")
+	}
+
+	// Debug logging
+	log.Printf("[FlightMapHandler] Processing flight: session_id=%s, flight_id=%s, ifc_id=%s, page=%d", sessionID, flightID, ifcID, page)
+
+	// Look up actual IF user ID from IFC ID
+	var actualUserID string
+	if ifcID != "" {
+		userStats, _, err := liveAPI.GetUserByIfcId(ifcID)
+		if err != nil {
+			log.Printf("[FlightMapHandler] Failed to lookup IF user ID for IFC ID %s: %v", ifcID, err)
+		} else if len(userStats.Result) > 0 {
+			actualUserID = userStats.Result[0].UserID
+			log.Printf("[FlightMapHandler] Resolved IFC ID %s to IF user ID %s", ifcID, actualUserID)
+		} else {
+			log.Printf("[FlightMapHandler] No results when looking up IFC ID %s", ifcID)
+		}
+	}
+
 	// Try to get from cache first - use combo key with session_id and flight_id
 	cacheKey := string(constants.CachePrefixFlightHistory) + sessionID + "_" + flightID
 	cachedVal, found := cache.Get(cacheKey)
@@ -238,44 +270,95 @@ func FlightMapHandler(
 			var flight dtos.FlightInfo
 			if err := json.Unmarshal(jsonData, &flight); err == nil {
 				flightInfo = &flight
+				log.Printf("[FlightMapHandler] Route data cache hit: %s_%s, route points=%d", sessionID, flightID, len(flight.Route))
+			} else {
+				log.Printf("[FlightMapHandler] Route data unmarshal failed: %v", err)
 			}
+		} else {
+			log.Printf("[FlightMapHandler] Route data marshal failed: %v", err)
 		}
+	} else {
+		log.Printf("[FlightMapHandler] Route data cache miss: %s_%s", sessionID, flightID)
 	}
 
-	// If not in cache, render the empty state with debug panel
-	// This allows the user to test the Live API endpoint directly
-	if flightInfo == nil {
-		apiKey := os.Getenv("IF_API_KEY")
+	// Fetch metadata using FlightsService (handles caching internally)
+	// This ensures we use the same cache instance and get properly typed data
+	var metaRecord *dtos.HistoryRecord
+	if actualUserID != "" && page > 0 && ifcID != "" {
+		historyDto, err := flightSvc.GetUserFlights(ifcID, page, sessionID)
+		if err != nil {
+			log.Printf("[FlightMapHandler] Failed to fetch user flights: %v", err)
+		} else if historyDto != nil && len(historyDto.Records) > 0 {
+			// Find the matching flight in the history
+			for _, record := range historyDto.Records {
+				if record.FlightID == flightID {
+					metaRecord = &record
+					log.Printf("[FlightMapHandler] Metadata found: %s, aircraft=%s, callsign=%s", flightID, record.Aircraft, record.Callsign)
+					break
+				}
+			}
+			if metaRecord == nil {
+				log.Printf("[FlightMapHandler] Flight %s not found in history page %d (found %d records)", flightID, page, len(historyDto.Records))
+			}
+		} else {
+			log.Printf("[FlightMapHandler] No flight history returned for user %s, page %d", actualUserID, page)
+		}
+	} else {
+		log.Printf("[FlightMapHandler] Skipping metadata fetch: user_id=%s, page=%d, ifc_id=%s", actualUserID, page, ifcID)
+	}
 
-		data := map[string]interface{}{
+	apiKey := os.Getenv("IF_API_KEY")
+
+	// Determine which partial to render based on data availability
+	var partialPath string
+	var data map[string]interface{}
+
+	// State 1: Flight with route available
+	if flightInfo != nil {
+		log.Printf("[FlightMapHandler] Rendering with-route state (route available)")
+		partialPath = "partials/flight-map/with-route.html"
+
+		route := flightInfo.Route
+		if len(route) > 500 {
+			route = downsampleRoute(route)
+		}
+
+		data = map[string]interface{}{
 			"FlightID":  flightID,
+			"SessionID": sessionID,
 			"APIKey":    apiKey,
-			"SessionID": sessionID, // Now we have it from the URL param
+			"Meta":      metaRecord, // Metadata from flight history cache
+			"Path":      route,
+			"Origin":    flightInfo.Origin,
+			"Dest":      flightInfo.Dest,
+			"RouteMeta": flightInfo.Meta, // Max speed/alt from route
 		}
-		if err := RenderPartial(w, "partials/flight-map-empty.html", data); err != nil {
-			http.Error(w, "Error rendering map", http.StatusInternalServerError)
+	} else if metaRecord != nil {
+		// State 2: Metadata available but no route
+		log.Printf("[FlightMapHandler] Rendering metadata-only state (route unavailable)")
+		partialPath = "partials/flight-map/metadata-only.html"
+
+		data = map[string]interface{}{
+			"FlightID":  flightID,
+			"SessionID": sessionID,
+			"APIKey":    apiKey,
+			"Meta":      metaRecord,
 		}
-		return
+	} else {
+		// State 3: No flight data available
+		log.Printf("[FlightMapHandler] Rendering empty state (no flight data)")
+		partialPath = "partials/flight-map/empty.html"
+
+		data = map[string]interface{}{
+			"FlightID":  flightID,
+			"SessionID": sessionID,
+			"APIKey":    apiKey,
+		}
 	}
 
-	// Downsample route if it has too many waypoints
-	route := flightInfo.Route
-	if len(route) > 500 {
-		route = downsampleRoute(route)
-	}
-
-	// Prepare template data
-	data := map[string]interface{}{
-		"Path":      route,
-		"Origin":    flightInfo.Origin,
-		"Dest":      flightInfo.Dest,
-		"Meta":      flightInfo.Meta,
-		"FlightID":  flightID,
-		"SessionID": flightInfo.SessionID, // Include session ID for debug panel if needed
-	}
-
-	// Render partial
-	if err := RenderPartial(w, "partials/flight-map.html", data); err != nil {
+	// Render appropriate partial
+	if err := RenderPartial(w, partialPath, data); err != nil {
+		log.Printf("[FlightMapHandler] Error rendering partial %s: %v", partialPath, err)
 		http.Error(w, "Error rendering flight map", http.StatusInternalServerError)
 		return
 	}

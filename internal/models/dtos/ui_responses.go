@@ -36,6 +36,11 @@ type FlightInfo struct {
 	Origin    RouteNode       `json:"origin"`
 	Dest      RouteNode       `json:"dest"`
 	SessionID string          `json:"sessionId"` // Session ID for the flight (for debug panel)
+	Callsign  string          `json:"callsign"`
+	DayTime   float32         `json:"dayTime"`   // in minutes
+	NightTime float32         `json:"nightTime"` // in minutes
+	XP        int             `json:"xp"`
+	WorldType int             `json:"worldType"` // 1=Casual, 2=Training, 3=Expert
 }
 
 type UserFlights struct {

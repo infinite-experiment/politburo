@@ -4,15 +4,18 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/redis/go-redis/v9"
+	"infinite-experiment/politburo/internal/metrics"
 )
 
 // RedisCacheService implements CacheInterface using Redis
 type RedisCacheService struct {
-	client *redis.Client
-	ctx    context.Context
+	client     *redis.Client
+	ctx        context.Context
+	metricsReg *metrics.MetricsRegistry
 }
 
 // Ensure RedisCacheService implements CacheInterface
@@ -29,9 +32,36 @@ func NewRedisCacheService(client *redis.Client) (*RedisCacheService, error) {
 	}
 
 	return &RedisCacheService{
-		client: client,
-		ctx:    ctx,
+		client:     client,
+		ctx:        ctx,
+		metricsReg: nil,
 	}, nil
+}
+
+// NewRedisCacheServiceWithMetrics creates a new Redis-based cache service with metrics collection
+func NewRedisCacheServiceWithMetrics(client *redis.Client, metricsReg *metrics.MetricsRegistry) (*RedisCacheService, error) {
+
+	ctx := context.Background()
+
+	// Test connection
+	if err := client.Ping(ctx).Err(); err != nil {
+		return nil, fmt.Errorf("failed to connect to Redis: %w", err)
+	}
+
+	return &RedisCacheService{
+		client:     client,
+		ctx:        ctx,
+		metricsReg: metricsReg,
+	}, nil
+}
+
+// extractCacheKeyPattern extracts the pattern from a cache key (e.g., "flight" from "flight:123:details")
+func redisCacheKeyPattern(key string) string {
+	parts := strings.Split(key, ":")
+	if len(parts) > 0 {
+		return parts[0]
+	}
+	return "unknown"
 }
 
 // Set stores a value in Redis with the given key and duration
@@ -52,12 +82,27 @@ func (r *RedisCacheService) Set(key string, value interface{}, duration time.Dur
 // Get retrieves a value from Redis by key
 func (r *RedisCacheService) Get(key string) (interface{}, bool) {
 	data, err := r.client.Get(r.ctx, key).Result()
+	found := true
+
 	if err == redis.Nil {
 		// Key not found
-		return nil, false
-	}
-	if err != nil {
+		found = false
+	} else if err != nil {
 		fmt.Printf("Redis cache: failed to get key %s: %v\n", key, err)
+		found = false
+	}
+
+	// Record cache metrics if metrics registry is available
+	if r.metricsReg != nil {
+		pattern := redisCacheKeyPattern(key)
+		if found {
+			r.metricsReg.CacheHitsTotal.WithLabelValues(pattern).Inc()
+		} else {
+			r.metricsReg.CacheMissesTotal.WithLabelValues(pattern).Inc()
+		}
+	}
+
+	if !found {
 		return nil, false
 	}
 

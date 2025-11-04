@@ -4,6 +4,7 @@ import (
 	"infinite-experiment/politburo/internal/common"
 	"infinite-experiment/politburo/internal/db"
 	"infinite-experiment/politburo/internal/db/repositories"
+	"infinite-experiment/politburo/internal/metrics"
 	"infinite-experiment/politburo/internal/providers"
 	"infinite-experiment/politburo/internal/services"
 	"log"
@@ -54,7 +55,7 @@ type Dependencies struct {
 	Services *Services
 }
 
-func InitDependencies() (*Dependencies, error) {
+func InitDependencies(metricsReg *metrics.MetricsRegistry) (*Dependencies, error) {
 
 	repositories := &Repositories{
 		User:                  *repositories.NewUserRepository(db.DB),
@@ -80,17 +81,17 @@ func InitDependencies() (*Dependencies, error) {
 	if useRedis {
 		// Initialize Redis client (used by both cache and queue services)
 		redisClient = common.NewRedisClient()
-		redisCache, err := common.NewRedisCacheService(redisClient)
+		redisCache, err := common.NewRedisCacheServiceWithMetrics(redisClient, metricsReg)
 		if err != nil {
 			log.Printf("Failed to initialize Redis cache, falling back to in-memory: %v", err)
-			cacheSvc = common.NewCacheService(60000, 600)
+			cacheSvc = common.NewCacheServiceWithMetrics(60000, 600, metricsReg)
 		} else {
 			log.Println("Using Redis cache")
 			cacheSvc = redisCache
 		}
 	} else {
 		log.Println("Using in-memory cache")
-		cacheSvc = common.NewCacheService(60000, 600)
+		cacheSvc = common.NewCacheServiceWithMetrics(60000, 600, metricsReg)
 	}
 
 	// Always initialize RedisQueueService (required for PIREP queue processing)
@@ -103,7 +104,7 @@ func InitDependencies() (*Dependencies, error) {
 		legacyCache = cs
 	} else {
 		// If using Redis, create a legacy in-memory cache for services that need it
-		legacyCache = common.NewCacheService(60000, 600)
+		legacyCache = common.NewCacheServiceWithMetrics(60000, 600, metricsReg)
 	}
 
 	liveSvc := common.NewLiveAPIService()

@@ -60,7 +60,7 @@ func RegisterUIRoutes(
 			vizbuUI.LogbookFlightsHandler(w, r, flightSvc)
 		})
 		dashboard.Get("/logbook/flight/{session_id}/{flight_id}/map", func(w http.ResponseWriter, r *http.Request) {
-			vizbuUI.FlightMapHandler(w, r, cache, liveAPI)
+			vizbuUI.FlightMapHandler(w, r, cache, liveAPI, flightSvc)
 		})
 		dashboard.Get("/logbook/pilots/search", func(w http.ResponseWriter, r *http.Request) {
 			vizbuUI.PilotSearchHandler(w, r, vaRoleRepo)

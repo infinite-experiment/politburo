@@ -85,14 +85,14 @@ const fltTTL = 15 * time.Minute    // Cache flight history for 15 minutes
 //    Value: UserStatsResponse (contains UserID needed for flight lookups)
 //    TTL: 15 minutes
 //
-// 2. User flights (Live API) - cached by UserID (not page-specific)
-//    Key: LIVE_FLIGHTS_{userID}
+// 2. User flights (Live API) - cached by UserID AND page number
+//    Key: LIVE_FLIGHTS_{userID}_page_{page}
 //    Value: UserFlightsResponse (paginated results from Live API)
 //    TTL: 15 minutes
-//    Note: Pagination is handled client-side from the cached response
+//    Note: Each page is cached separately for correct pagination
 //
-// 3. Flight history (processed) - cached by UserID (user-wise, not page-wise)
-//    Key: FH_{userID}
+// 3. Flight history (processed) - cached by UserID AND page number
+//    Key: FH_{userID}_page_{page}
 //    Value: FlightHistoryDto (our processed/enriched flight data)
 //    TTL: 15 minutes
 //
@@ -124,17 +124,16 @@ func (svc *FlightsService) getUserByIfcIDCached(ifcID string) (*dtos.UserStatsRe
 
 // -----------------------------------------------------------------------------
 // 2) Paged flight list for a userID  (GET /users/{id}/flights?page=n)
-// Note: We cache at the user level, not page-wise, to simplify pagination
-// Every request fetches from the API but caches the entire user's flight list
-// This ensures all pages are available without multiple cache entries
+// Note: We cache at the user level AND page number for proper pagination
+// Each page is cached separately with a unique cache key
+// This ensures correct pagination without returning duplicate results across pages
 // -----------------------------------------------------------------------------
 func (svc *FlightsService) getUserFlightsCached(userID string, page int) (*dtos.UserFlightsResponse, error) {
-	// Cache key at user level (not page-specific)
-	cacheKey := fmt.Sprintf("LIVE_FLIGHTS_%s", userID)
+	// Cache key includes page number for correct pagination
+	cacheKey := fmt.Sprintf("LIVE_FLIGHTS_%s_page_%d", userID, page)
 
 	val, err := svc.Cache.GetOrSet(cacheKey, fltTTL, func() (any, error) {
-		// Always fetch from API (page parameter ignored for caching)
-		// The API returns paginated results, we cache the first page's metadata
+		// Fetch from API with the specific page number
 		resp, _, err := svc.ApiService.GetUserFlights(userID, page)
 		return resp, err
 	})
@@ -152,9 +151,13 @@ func (svc *FlightsService) getUserFlightsCached(userID string, page int) (*dtos.
 func (svc *FlightsService) GetUserFlights(ifcID string, page int, sID string) (*dtos.FlightHistoryDto, error) {
 
 	response := &dtos.FlightHistoryDto{
-		PageNo:  page,
-		Error:   "",
-		Records: nil,
+		PageNo:      page,
+		Error:       "",
+		Records:     nil,
+		HasNext:     false,
+		HasPrevious: false,
+		TotalPages:  0,
+		TotalCount:  0,
 	}
 
 	// Fetch user by IFC ID
@@ -198,6 +201,12 @@ func (svc *FlightsService) GetUserFlights(ifcID string, page int, sID string) (*
 		log.Printf("[GetUserFlights] Warning: Could not fetch sessions: %v", err)
 	}
 
+	// Populate pagination metadata from Live API response
+	response.HasNext = flts.HasNext
+	response.HasPrevious = flts.HasPrevious
+	response.TotalPages = flts.TotalPages
+	response.TotalCount = flts.TotalCount
+
 	var newSummaries []dtos.FlightSummary
 
 	for _, rec := range flts.Flights {
@@ -208,9 +217,10 @@ func (svc *FlightsService) GetUserFlights(ifcID string, page int, sID string) (*
 			aircraftName = liveryData.AircraftName
 			liveryName = liveryData.LiveryName
 		}
-		// rec.TotalTime is in hours (from Live API)
-		hours := int(rec.TotalTime)
-		minutes := int((rec.TotalTime - float32(hours)) * 60)
+		// rec.TotalTime is in minutes (from Live API)
+		totalMinutes := int(rec.TotalTime)
+		hours := totalMinutes / 60
+		minutes := totalMinutes % 60
 		dur := fmt.Sprintf("%02d:%02d", hours, minutes)
 
 		newSummaries = append(newSummaries, dtos.FlightSummary{
@@ -238,6 +248,10 @@ func (svc *FlightsService) GetUserFlights(ifcID string, page int, sID string) (*
 			Violations: len(rec.Violations),
 			Duration:   dur,
 			Aircraft:   aircraftName,
+			DayTime:    rec.DayTime,
+			NightTime:  rec.NightTime,
+			XP:         rec.XP,
+			WorldType:  rec.WorldType,
 			Username:   username,
 		}
 		// Use combo key: sessionId_flightId for direct retrieval
@@ -267,15 +281,15 @@ func (svc *FlightsService) GetUserFlights(ifcID string, page int, sID string) (*
 
 	}
 	// Cache the complete flight history response
-	svc.UpdateUserFlightsCache(uId, response)
+	svc.UpdateUserFlightsCache(uId, response, page)
 	return response, nil
 }
 
 // UpdateUserFlightsCache caches the complete flight history response for a user
 // This allows efficient pagination by caching the full paginated response with metadata
-func (svc *FlightsService) UpdateUserFlightsCache(uId string, historyDto *dtos.FlightHistoryDto) {
-	// Cache the complete paginated flight history response
-	histCacheKey := fmt.Sprintf("FH_%s", uId)
+func (svc *FlightsService) UpdateUserFlightsCache(uId string, historyDto *dtos.FlightHistoryDto, page int) {
+	// Cache the complete paginated flight history response with page-specific key
+	histCacheKey := fmt.Sprintf("FH_%s_page_%d", uId, page)
 	svc.Cache.Set(histCacheKey, historyDto, fltTTL)
 
 	log.Printf("[UpdateUserFlightsCache] Cached flight history for user %s, page %d with %d records, key=%s",

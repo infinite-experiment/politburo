@@ -45,7 +45,7 @@ func RegisterRoutes(upSince time.Time) http.Handler {
 	r.Get("/healthCheck", api.HealthCheckHandler(db.DB, upSince))
 
 	// Initialize dependencies using DI pattern
-	deps, err := api.InitDependencies()
+	deps, err := api.InitDependencies(metricsReg)
 	if err != nil {
 		panic("Failed to initialize dependencies: " + err.Error())
 	}

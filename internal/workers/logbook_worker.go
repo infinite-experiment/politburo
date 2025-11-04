@@ -121,8 +121,7 @@ func LogbookWorker(cache common.CacheInterface, liveApiService *common.LiveAPISe
 			destNode.Lat = waypoints[len(waypoints)-1].Lat
 			destNode.Long = waypoints[len(waypoints)-1].Long
 		}
-		hours := int(req.Flight.TotalTime) / 60
-		minutes := int(req.Flight.TotalTime) % 60
+		totalMinutes := int(req.Flight.TotalTime)
 
 		// Use new livery service (cache-first, then DB)
 		aircraftName := ""
@@ -140,13 +139,18 @@ func LogbookWorker(cache common.CacheInterface, liveApiService *common.LiveAPISe
 				MaxAlt:     maxAlt,
 				Violations: len(req.Flight.Violations),
 				Landings:   req.Flight.LandingCount,
-				Duration:   hours*60 + minutes,
+				Duration:   totalMinutes,
 				StartedAt:  req.Flight.Created,
 			},
 			Route:     waypoints,
 			Origin:    originNode,
 			Dest:      destNode,
-			SessionID: req.SessionId, // ← Include session ID
+			SessionID: req.SessionId,
+			Callsign:  req.Flight.Callsign,
+			DayTime:   req.Flight.DayTime,
+			NightTime: req.Flight.NightTime,
+			XP:        req.Flight.XP,
+			WorldType: req.Flight.WorldType,
 		}
 
 		// Cache for 7 days (604800 seconds)
