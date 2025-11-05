@@ -8,6 +8,7 @@ import (
 	"infinite-experiment/politburo/internal/common"
 	"infinite-experiment/politburo/internal/db/repositories"
 	"infinite-experiment/politburo/internal/middleware"
+	"infinite-experiment/politburo/internal/metrics"
 	"infinite-experiment/politburo/internal/services"
 	vizbuUI "infinite-experiment/politburo/vizburo/ui"
 
@@ -17,6 +18,7 @@ import (
 // RegisterUIRoutes registers all UI-related routes
 func RegisterUIRoutes(
 	r chi.Router,
+	metricsReg *metrics.MetricsRegistry,
 	sessionSvc *common.SessionService,
 	urlSigner *common.URLSignerService,
 	userRepo *repositories.UserRepositoryGORM,
@@ -36,20 +38,30 @@ func RegisterUIRoutes(
 
 	// Static file serving (CSS, JS, images) with correct MIME types
 	fileServer := http.FileServer(http.Dir("vizburo/ui/static"))
-	r.Handle("/static/*", http.StripPrefix("/static/", mimeTypeMiddleware(fileServer)))
-
-	// Default route - redirect to login
-	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, "/auth/login", http.StatusMovedPermanently)
+	r.Group(func(staticRoutes chi.Router) {
+		staticRoutes.Use(middleware.MetricsMiddleware(metricsReg))
+		staticRoutes.Handle("/static/*", http.StripPrefix("/static/", mimeTypeMiddleware(fileServer)))
 	})
 
-	// Auth routes (public)
-	r.Get("/auth/login", authHandler.TokenLoginHandler)
-	r.Post("/auth/logout", authHandler.LogoutHandler)
+	// Default route - redirect to login
+	r.Group(func(rootRoutes chi.Router) {
+		rootRoutes.Use(middleware.MetricsMiddleware(metricsReg))
+		rootRoutes.Get("/", func(w http.ResponseWriter, r *http.Request) {
+			http.Redirect(w, r, "/auth/login", http.StatusMovedPermanently)
+		})
+	})
+
+	// Auth routes (public) with metrics
+	r.Group(func(auth chi.Router) {
+		auth.Use(middleware.MetricsMiddleware(metricsReg))
+		auth.Get("/auth/login", authHandler.TokenLoginHandler)
+		auth.Post("/auth/logout", authHandler.LogoutHandler)
+	})
 
 	// Dashboard routes (require authentication)
 	r.Route("/dashboard", func(dashboard chi.Router) {
-		// Apply authentication middleware to all dashboard routes
+		// Apply metrics and authentication middleware to all dashboard routes
+		dashboard.Use(middleware.MetricsMiddleware(metricsReg))
 		dashboard.Use(authMiddleware)
 
 		// Main dashboard page (all authenticated users)
@@ -98,6 +110,7 @@ func RegisterUIRoutes(
 
 	// UI API routes
 	r.Route("/ui/api", func(uiApi chi.Router) {
+		uiApi.Use(middleware.MetricsMiddleware(metricsReg))
 		uiApi.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)

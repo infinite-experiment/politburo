@@ -29,7 +29,6 @@ func RegisterRoutes(upSince time.Time) http.Handler {
 
 	// global middleware
 	r.Use(middleware.RequestIDMiddleware)
-	r.Use(middleware.MetricsMiddleware(metricsReg))
 
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   []string{"https://*", "http://localhost:8081"}, // Allow all origins
@@ -75,7 +74,7 @@ func RegisterRoutes(upSince time.Time) http.Handler {
 	// This will be passed to middleware when creating handlers
 
 	// Register UI routes (separate from API)
-	RegisterUIRoutes(r, sessionSvc, urlSigner, userRepoGorm, vaUserRoleRepo, vaGormRepo, flightSvc, deps.Services.Cache, &deps.Services.Live)
+	RegisterUIRoutes(r, metricsReg, sessionSvc, urlSigner, userRepoGorm, vaUserRoleRepo, vaGormRepo, flightSvc, deps.Services.Cache, &deps.Services.Live)
 
 	// Setup workers and jobs first
 	// Setup scheduled jobs (both pilot and route sync run every hour)
@@ -112,7 +111,7 @@ func RegisterRoutes(upSince time.Time) http.Handler {
 	airportLoader := common.NewAirportLoaderService(db.PgDB)
 
 	// Register API routes (after jobsHandler is initialized)
-	RegisterAPIRoutes(r, userRepoGorm, keyRepo, handlers, legacyCacheSvc, cfgSvc, vaMgmtSvc, atApiSvc, syncSvc, flightSvc, jobsHandler, deps, airportLoader, sessionSvc)
+	RegisterAPIRoutes(r, metricsReg, userRepoGorm, keyRepo, handlers, legacyCacheSvc, cfgSvc, vaMgmtSvc, atApiSvc, syncSvc, flightSvc, jobsHandler, deps, airportLoader, sessionSvc)
 
 	return r
 }

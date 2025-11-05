@@ -5,6 +5,7 @@ import (
 	"infinite-experiment/politburo/internal/common"
 	"infinite-experiment/politburo/internal/db/repositories"
 	"infinite-experiment/politburo/internal/middleware"
+	"infinite-experiment/politburo/internal/metrics"
 	"infinite-experiment/politburo/internal/services"
 
 	"github.com/go-chi/chi/v5"
@@ -12,15 +13,20 @@ import (
 
 // RegisterAPIRoutes registers all API v1 routes and handlers
 // This keeps API route registration separate from the main router setup
-func RegisterAPIRoutes(r chi.Router, userRepoGorm *repositories.UserRepositoryGORM, keyRepo *repositories.KeysRepo,
+func RegisterAPIRoutes(r chi.Router, metricsReg *metrics.MetricsRegistry, userRepoGorm *repositories.UserRepositoryGORM, keyRepo *repositories.KeysRepo,
 	handlers *api.Handlers, legacyCacheSvc *common.CacheService, cfgSvc *common.VAConfigService, vaMgmtSvc *services.VAManagementService,
 	atApiSvc *common.AirtableApiService, syncSvc *services.AtSyncService, flightSvc *services.FlightsService, jobsHandler *api.JobsHandler, deps *api.Dependencies, airportLoader *common.AirportLoaderService, sessionSvc *common.SessionService) {
 
-	r.Get("/public/flight", api.UserFlightMapHandler(legacyCacheSvc))
-	r.Get("/public/flight/user", api.UserFlightsCacheHandler(legacyCacheSvc))
+	// Public routes with metrics
+	r.Group(func(public chi.Router) {
+		public.Use(middleware.MetricsMiddleware(metricsReg))
+		public.Get("/public/flight", api.UserFlightMapHandler(legacyCacheSvc))
+		public.Get("/public/flight/user", api.UserFlightsCacheHandler(legacyCacheSvc))
+	})
 
 	// API v1 routes
 	r.Route("/api/v1", func(v1 chi.Router) {
+		v1.Use(middleware.MetricsMiddleware(metricsReg))
 		v1.Use(middleware.AuthMiddleware(userRepoGorm, keyRepo, sessionSvc)) // global: all routes must be authenticated (using GORM or session cookie)
 		v1.Get("/user/details", handlers.GetUserDetails())
 		v1.Get("/admin/verify-god", handlers.VerifyGodMode())

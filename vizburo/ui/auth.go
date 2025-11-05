@@ -16,11 +16,11 @@ import (
 
 // AuthHandler manages authentication routes
 type AuthHandler struct {
-	sessionSvc   *common.SessionService
-	urlSigner    *common.URLSignerService
-	userRepo     *repositories.UserRepositoryGORM
-	vaRoleRepo   *repositories.VAUserRoleRepository
-	vaGormRepo   *repositories.VAGORMRepository
+	sessionSvc *common.SessionService
+	urlSigner  *common.URLSignerService
+	userRepo   *repositories.UserRepositoryGORM
+	vaRoleRepo *repositories.VAUserRoleRepository
+	vaGormRepo *repositories.VAGORMRepository
 }
 
 // NewAuthHandler creates a new auth handler
@@ -32,11 +32,11 @@ func NewAuthHandler(
 	vaGormRepo *repositories.VAGORMRepository,
 ) *AuthHandler {
 	return &AuthHandler{
-		sessionSvc:   sessionSvc,
-		urlSigner:    urlSigner,
-		userRepo:     userRepo,
-		vaRoleRepo:   vaRoleRepo,
-		vaGormRepo:   vaGormRepo,
+		sessionSvc: sessionSvc,
+		urlSigner:  urlSigner,
+		userRepo:   userRepo,
+		vaRoleRepo: vaRoleRepo,
+		vaGormRepo: vaGormRepo,
 	}
 }
 
@@ -95,7 +95,6 @@ func (h *AuthHandler) TokenLoginHandler(w http.ResponseWriter, r *http.Request) 
 			VAName:          va.Name,
 			Role:            string(vaRole.Role),
 			DiscordServerID: va.DiscordID,
-			IconURL:         va.IconURL,
 		})
 	}
 
@@ -109,7 +108,7 @@ func (h *AuthHandler) TokenLoginHandler(w http.ResponseWriter, r *http.Request) 
 		signedToken.UserID,
 		signedToken.VAID,
 		user.DiscordID,
-		"",  // Discord server ID will be set from active VA
+		"", // Discord server ID will be set from active VA
 		username,
 		virtualAirlines,
 	)
@@ -130,7 +129,7 @@ func (h *AuthHandler) TokenLoginHandler(w http.ResponseWriter, r *http.Request) 
 
 	// Extract domain from host (remove port)
 	if idx := strings.LastIndex(host, ":"); idx != -1 {
-		host = host[:idx]  // Remove port for cookie domain
+		host = host[:idx] // Remove port for cookie domain
 	}
 
 	// Determine if HTTPS is being used
@@ -147,11 +146,11 @@ func (h *AuthHandler) TokenLoginHandler(w http.ResponseWriter, r *http.Request) 
 		Name:     "session_id",
 		Value:    sessionID,
 		Path:     "/",
-		Domain:   host,  // Use forwarded host for proper cookie domain
+		Domain:   host, // Use forwarded host for proper cookie domain
 		HttpOnly: true,
-		Secure:   isSecure,  // Only set for HTTPS
-		SameSite: http.SameSiteLaxMode,  // Lax allows same-site cookies
-		MaxAge:   604800, // 7 days in seconds
+		Secure:   isSecure,             // Only set for HTTPS
+		SameSite: http.SameSiteLaxMode, // Lax allows same-site cookies
+		MaxAge:   604800,               // 7 days in seconds
 	}
 	http.SetCookie(w, cookie)
 
@@ -176,7 +175,7 @@ func (h *AuthHandler) LogoutHandler(w http.ResponseWriter, r *http.Request) {
 	// Clear session cookie
 	http.SetCookie(w, &http.Cookie{
 		Name:   "session_id",
-		MaxAge: -1,  // Delete cookie
+		MaxAge: -1, // Delete cookie
 	})
 
 	// Redirect to login page
@@ -238,7 +237,7 @@ func (h *AuthHandler) GenerateDashboardLinkHandler(w http.ResponseWriter, r *htt
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"url":        fmt.Sprintf("%s/auth/login?token=%s", uiBaseURL, token),
-		"expires_in": 900,  // seconds
+		"expires_in": 900, // seconds
 	})
 }
 
@@ -280,12 +279,12 @@ func (h *AuthHandler) SwitchVAHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Prepare template data
 	data := map[string]interface{}{
-		"ActiveVAID":       updatedSession.ActiveVAID,
-		"ActiveVA":         activeVA,
-		"VirtualAirlines":  updatedSession.VirtualAirlines,
-		"Username":         updatedSession.Username,
-		"PageTitle":        activeVA.VAName,
-		"UserID":           updatedSession.UserID,
+		"ActiveVAID":      updatedSession.ActiveVAID,
+		"ActiveVA":        activeVA,
+		"VirtualAirlines": updatedSession.VirtualAirlines,
+		"Username":        updatedSession.Username,
+		"PageTitle":       activeVA.VAName,
+		"UserID":          updatedSession.UserID,
 	}
 
 	// Render dashboard content for HTMX swap (partial, no base layout)

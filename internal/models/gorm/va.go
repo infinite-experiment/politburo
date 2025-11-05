@@ -7,7 +7,6 @@ type VA struct {
 	DiscordID           string    `gorm:"column:discord_server_id;uniqueIndex"`
 	Name                string    `gorm:"column:name"`
 	Code                string    `gorm:"column:code;uniqueIndex"`
-	IconURL             string    `gorm:"column:icon_url"`
 	IsActive            bool      `gorm:"column:is_active;default:true"`
 	IsAirtableEnabled   bool      `gorm:"column:is_airtable_enabled;default:false"`
 	FlightModesConfig   JSONB     `gorm:"column:flight_modes_config;type:jsonb;default:'{}'"`

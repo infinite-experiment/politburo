@@ -19,20 +19,19 @@ type VAMembership struct {
 	VAName          string `json:"va_name"`
 	Role            string `json:"role"`
 	DiscordServerID string `json:"discord_server_id"`
-	IconURL         string `json:"icon_url"`
 }
 
 // SessionData represents a user's session with multi-VA support
 type SessionData struct {
-	SessionID       string          `json:"session_id"`
-	UserID          string          `json:"user_id"`
-	ActiveVAID      string          `json:"active_va_id"`
-	DiscordID       string          `json:"discord_id"`
-	DiscordServerID string          `json:"discord_server_id"`
-	Username        string          `json:"username"`
-	VirtualAirlines []VAMembership  `json:"virtual_airlines"`
-	CreatedAt       time.Time       `json:"created_at"`
-	ExpiresAt       time.Time       `json:"expires_at"`
+	SessionID       string         `json:"session_id"`
+	UserID          string         `json:"user_id"`
+	ActiveVAID      string         `json:"active_va_id"`
+	DiscordID       string         `json:"discord_id"`
+	DiscordServerID string         `json:"discord_server_id"`
+	Username        string         `json:"username"`
+	VirtualAirlines []VAMembership `json:"virtual_airlines"`
+	CreatedAt       time.Time      `json:"created_at"`
+	ExpiresAt       time.Time      `json:"expires_at"`
 }
 
 // SessionService manages user sessions in Redis
