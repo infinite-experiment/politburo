@@ -2,6 +2,7 @@ package ui
 
 import (
 	"encoding/json"
+	"fmt"
 	"infinite-experiment/politburo/internal/auth"
 	"infinite-experiment/politburo/internal/common"
 	"infinite-experiment/politburo/internal/constants"
@@ -9,6 +10,7 @@ import (
 	"infinite-experiment/politburo/internal/models/dtos"
 	"infinite-experiment/politburo/internal/services"
 	"log"
+	"math"
 	"net/http"
 	"os"
 	"strconv"
@@ -319,8 +321,8 @@ func FlightMapHandler(
 		partialPath = "partials/flight-map/with-route.html"
 
 		route := flightInfo.Route
-		if len(route) > 500 {
-			route = downsampleRoute(route)
+		if len(route) > 1000 {
+			route = downsampleRouteRDP(route)
 		}
 
 		data = map[string]interface{}{
@@ -451,31 +453,104 @@ func PilotSearchHandler(
 	}
 }
 
-// downsampleRoute reduces the number of waypoints in a flight route
-// For 500-1500 points: keeps every 3rd point
-// For 1500+ points: keeps every 5th point
-// Always keeps first and last points
-func downsampleRoute(route []dtos.RouteWaypoint) []dtos.RouteWaypoint {
-	if len(route) <= 500 {
+// perpendicularDistance calculates the perpendicular distance from a point to a line segment
+// Used by Ramer-Douglas-Peucker algorithm for polyline simplification
+func perpendicularDistance(point, lineStart, lineEnd dtos.RouteWaypoint) float64 {
+	// Parse coordinates from string format
+	lat1 := parseCoord(lineStart.Lat)
+	lng1 := parseCoord(lineStart.Long)
+	lat2 := parseCoord(lineEnd.Lat)
+	lng2 := parseCoord(lineEnd.Long)
+	lat0 := parseCoord(point.Lat)
+	lng0 := parseCoord(point.Long)
+
+	// Calculate perpendicular distance using point-to-line formula
+	numerator := math.Abs((lat2-lat1)*(lng1-lng0) - (lng2-lng1)*(lat1-lat0))
+	denominator := math.Sqrt((lat2-lat1)*(lat2-lat1) + (lng2-lng1)*(lng2-lng1))
+
+	if denominator == 0 {
+		// Points are identical, return distance between point and start
+		return math.Sqrt((lat0-lat1)*(lat0-lat1) + (lng0-lng1)*(lng0-lng1))
+	}
+
+	return numerator / denominator
+}
+
+// parseCoord converts a coordinate string to float64
+func parseCoord(coordStr string) float64 {
+	var val float64
+	_, _ = fmt.Sscanf(coordStr, "%f", &val)
+	return val
+}
+
+// rdpSimplify recursively simplifies a polyline using the Ramer-Douglas-Peucker algorithm
+// epsilon: maximum distance threshold for point removal
+func rdpSimplify(points []dtos.RouteWaypoint, epsilon float64) []dtos.RouteWaypoint {
+	if len(points) < 3 {
+		return points
+	}
+
+	// Find the point with maximum distance from line segment
+	maxDist := 0.0
+	maxIdx := 0
+	for i := 1; i < len(points)-1; i++ {
+		dist := perpendicularDistance(points[i], points[0], points[len(points)-1])
+		if dist > maxDist {
+			maxDist = dist
+			maxIdx = i
+		}
+	}
+
+	// If max distance is less than epsilon, remove all intermediate points
+	if maxDist < epsilon {
+		return []dtos.RouteWaypoint{points[0], points[len(points)-1]}
+	}
+
+	// Otherwise, recursively simplify the two segments
+	leftSegment := rdpSimplify(points[:maxIdx+1], epsilon)
+	rightSegment := rdpSimplify(points[maxIdx:], epsilon)
+
+	// Merge segments (avoid duplicating the point at maxIdx)
+	result := make([]dtos.RouteWaypoint, 0, len(leftSegment)+len(rightSegment)-1)
+	result = append(result, leftSegment...)
+	result = append(result, rightSegment[1:]...)
+
+	return result
+}
+
+// downsampleRouteRDP reduces the number of waypoints using the Ramer-Douglas-Peucker algorithm
+// Targets 50-60% reduction for better visual accuracy while maintaining route geometry
+// Automatically adjusts epsilon based on route size to achieve target reduction
+func downsampleRouteRDP(route []dtos.RouteWaypoint) []dtos.RouteWaypoint {
+	if len(route) <= 1000 {
 		return route
 	}
 
-	var step int
-	if len(route) <= 1500 {
-		step = 3
-	} else {
-		step = 5
+	// Auto-tune epsilon to target 55% reduction
+	// Base epsilon: 0.0005 degrees (~55m at equator) for ~1500 point route
+	// Scale with route size for consistent reduction percentage
+	baseEpsilon := 0.0005
+	sizeRatio := float64(len(route)) / 1500.0
+	epsilon := baseEpsilon * sizeRatio
+
+	simplified := rdpSimplify(route, epsilon)
+
+	// If we removed too many points (>70% reduction), increase epsilon and retry
+	if float64(len(simplified))/float64(len(route)) < 0.30 {
+		epsilon *= 0.7
+		simplified = rdpSimplify(route, epsilon)
 	}
 
-	result := []dtos.RouteWaypoint{route[0]} // Always include first point
-
-	for i := step; i < len(route)-1; i += step {
-		result = append(result, route[i])
+	// If we removed too few points (<30% reduction), decrease epsilon
+	if float64(len(simplified))/float64(len(route)) > 0.75 {
+		epsilon *= 1.5
+		simplified = rdpSimplify(route, epsilon)
 	}
 
-	result = append(result, route[len(route)-1]) // Always include last point
+	log.Printf("[downsampleRouteRDP] Reduced %d points to %d points (%.1f%% reduction)",
+		len(route), len(simplified), 100.0*(1.0-float64(len(simplified))/float64(len(route))))
 
-	return result
+	return simplified
 }
 
 // MapResetHandler returns empty map state (HTMX partial)
