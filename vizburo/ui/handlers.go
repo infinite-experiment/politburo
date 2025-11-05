@@ -66,22 +66,10 @@ func DashboardHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // LogbookHandler serves the logbook page for staff and admin users
+// Role check: Staff middleware ensures only staff and admin can access this
 func LogbookHandler(w http.ResponseWriter, r *http.Request) {
-	// Get user claims from context
-	claims := auth.GetUserClaims(r.Context())
-	if claims == nil {
-		http.Redirect(w, r, "/auth/login", http.StatusSeeOther)
-		return
-	}
-
-	// Get session data from context
+	// Get session data from context (guaranteed by auth middleware)
 	sessionDataInterface := auth.GetSessionData(r.Context())
-	if sessionDataInterface == nil {
-		http.Redirect(w, r, "/auth/login", http.StatusSeeOther)
-		return
-	}
-
-	// Cast to SessionData
 	sessionData, ok := sessionDataInterface.(*common.SessionData)
 	if !ok {
 		http.Error(w, "Invalid session data", http.StatusInternalServerError)
@@ -92,12 +80,6 @@ func LogbookHandler(w http.ResponseWriter, r *http.Request) {
 	activeVA := sessionData.GetActiveVA()
 	if activeVA == nil {
 		http.Error(w, "No active VA found", http.StatusInternalServerError)
-		return
-	}
-
-	// Role check: only staff and admin can access logbook
-	if activeVA.Role != "staff" && activeVA.Role != "admin" {
-		http.Error(w, "You do not have permission to access the logbook. Staff or Admin privileges required.", http.StatusForbidden)
 		return
 	}
 
@@ -569,6 +551,224 @@ func MapResetHandler(w http.ResponseWriter, r *http.Request) {
 	// Render empty map
 	if err := RenderPartial(w, "partials/flight-map-empty.html", data); err != nil {
 		http.Error(w, "Error rendering map", http.StatusInternalServerError)
+		return
+	}
+}
+
+// PilotsHandler returns the main pilots page
+// Role check: Staff middleware ensures only staff and admin can access this
+func PilotsHandler(w http.ResponseWriter, r *http.Request) {
+	// Get session data from context (guaranteed by auth middleware)
+	sessionDataInterface := auth.GetSessionData(r.Context())
+	sessionData, ok := sessionDataInterface.(*common.SessionData)
+	if !ok {
+		http.Error(w, "Invalid session data", http.StatusInternalServerError)
+		return
+	}
+
+	activeVA := sessionData.GetActiveVA()
+	if activeVA == nil {
+		http.Error(w, "No active VA found", http.StatusInternalServerError)
+		return
+	}
+
+	// Prepare template data
+	data := map[string]interface{}{
+		"ActiveVA":        activeVA,
+		"VirtualAirlines": sessionData.VirtualAirlines,
+		"Username":        sessionData.Username,
+		"UserID":          sessionData.UserID,
+		"ActiveVAID":      sessionData.ActiveVAID,
+		"PageTitle":       "Pilots",
+	}
+
+	RenderTemplate(w, "pages/pilots.html", data)
+}
+
+// PilotsListHandler returns a list of pilots for the active VA (HTMX partial)
+func PilotsListHandler(
+	w http.ResponseWriter,
+	r *http.Request,
+	pilotMgmtSvc *services.PilotManagementService,
+) {
+	// Get session data
+	sessionDataInterface := auth.GetSessionData(r.Context())
+	if sessionDataInterface == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	sessionData, ok := sessionDataInterface.(*common.SessionData)
+	if !ok {
+		http.Error(w, "Invalid session data", http.StatusInternalServerError)
+		return
+	}
+
+	activeVA := sessionData.GetActiveVA()
+	if activeVA == nil {
+		http.Error(w, "No active VA found", http.StatusInternalServerError)
+		return
+	}
+
+	// Get pilots from service
+	pilots, err := pilotMgmtSvc.GetPilotsByVAID(
+		r.Context(),
+		activeVA.VAID,
+		constants.VARole(activeVA.Role),
+	)
+	if err != nil {
+		http.Error(w, "Failed to fetch pilots: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	if pilots == nil {
+		pilots = []services.PilotDTO{}
+	}
+
+	// Prepare template data
+	data := map[string]interface{}{
+		"Pilots":    pilots,
+		"ActiveVA":  activeVA,
+		"IsAdmin":   activeVA.Role == "admin",
+	}
+
+	// Render partial
+	if err := RenderPartial(w, "partials/pilots-table.html", data); err != nil {
+		http.Error(w, "Error rendering pilots table", http.StatusInternalServerError)
+		return
+	}
+}
+
+// UpdatePilotRoleHandler updates a pilot's role (HTMX endpoint)
+// Role check: Admin middleware ensures only admins can access this
+func UpdatePilotRoleHandler(
+	w http.ResponseWriter,
+	r *http.Request,
+	pilotMgmtSvc *services.PilotManagementService,
+) {
+	// Get session data (guaranteed by auth middleware)
+	sessionDataInterface := auth.GetSessionData(r.Context())
+	sessionData, ok := sessionDataInterface.(*common.SessionData)
+	if !ok {
+		http.Error(w, "Invalid session data", http.StatusInternalServerError)
+		return
+	}
+
+	activeVA := sessionData.GetActiveVA()
+	if activeVA == nil {
+		http.Error(w, "No active VA found", http.StatusInternalServerError)
+		return
+	}
+
+	// Get pilot ID from URL parameter
+	pilotID := chi.URLParam(r, "pilot_id")
+	if pilotID == "" {
+		http.Error(w, "Missing pilot_id in URL", http.StatusBadRequest)
+		return
+	}
+
+	// Get new role from form data
+	newRole := r.FormValue("role")
+	if newRole == "" {
+		http.Error(w, "Missing role field", http.StatusBadRequest)
+		return
+	}
+
+	// Update role via service (service validates admin role for defense-in-depth)
+	err := pilotMgmtSvc.UpdatePilotRole(
+		r.Context(),
+		activeVA.VAID,
+		pilotID,
+		newRole,
+		constants.VARole(activeVA.Role),
+	)
+	if err != nil {
+		http.Error(w, "Failed to update pilot role: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Re-fetch pilots and render updated table
+	pilots, err := pilotMgmtSvc.GetPilotsByVAID(
+		r.Context(),
+		activeVA.VAID,
+		constants.VARole(activeVA.Role),
+	)
+	if err != nil {
+		http.Error(w, "Failed to fetch updated pilots", http.StatusInternalServerError)
+		return
+	}
+
+	data := map[string]interface{}{
+		"Pilots":   pilots,
+		"ActiveVA": activeVA,
+		"IsAdmin":  activeVA.Role == "admin",
+	}
+
+	if err := RenderPartial(w, "partials/pilots-table.html", data); err != nil {
+		http.Error(w, "Error rendering pilots table", http.StatusInternalServerError)
+		return
+	}
+}
+
+// RemovePilotHandler removes a pilot from the VA (HTMX endpoint)
+// Role check: Admin middleware ensures only admins can access this
+func RemovePilotHandler(
+	w http.ResponseWriter,
+	r *http.Request,
+	pilotMgmtSvc *services.PilotManagementService,
+) {
+	// Get session data (guaranteed by auth middleware)
+	sessionDataInterface := auth.GetSessionData(r.Context())
+	sessionData, ok := sessionDataInterface.(*common.SessionData)
+	if !ok {
+		http.Error(w, "Invalid session data", http.StatusInternalServerError)
+		return
+	}
+
+	activeVA := sessionData.GetActiveVA()
+	if activeVA == nil {
+		http.Error(w, "No active VA found", http.StatusInternalServerError)
+		return
+	}
+
+	// Get pilot ID from URL parameter
+	pilotID := chi.URLParam(r, "pilot_id")
+	if pilotID == "" {
+		http.Error(w, "Missing pilot_id in URL", http.StatusBadRequest)
+		return
+	}
+
+	// Remove pilot via service (service validates admin role for defense-in-depth)
+	err := pilotMgmtSvc.RemovePilot(
+		r.Context(),
+		activeVA.VAID,
+		pilotID,
+		constants.VARole(activeVA.Role),
+	)
+	if err != nil {
+		http.Error(w, "Failed to remove pilot: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Re-fetch pilots and render updated table
+	pilots, err := pilotMgmtSvc.GetPilotsByVAID(
+		r.Context(),
+		activeVA.VAID,
+		constants.VARole(activeVA.Role),
+	)
+	if err != nil {
+		http.Error(w, "Failed to fetch updated pilots", http.StatusInternalServerError)
+		return
+	}
+
+	data := map[string]interface{}{
+		"Pilots":   pilots,
+		"ActiveVA": activeVA,
+		"IsAdmin":  activeVA.Role == "admin",
+	}
+
+	if err := RenderPartial(w, "partials/pilots-table.html", data); err != nil {
+		http.Error(w, "Error rendering pilots table", http.StatusInternalServerError)
 		return
 	}
 }

@@ -1,0 +1,60 @@
+{{define "content"}}
+{{if .Pilots}}
+<table class="pilots-table">
+    <thead>
+        <tr>
+            <th>IFC Username</th>
+            <th>Callsign</th>
+            <th>Role</th>
+            <th>Joined</th>
+            <th {{if not .IsAdmin}}style="display: none;"{{end}}>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        {{range .Pilots}}
+        <tr>
+            <td>{{.IFCommunityID}}</td>
+            <td>{{if .Callsign}}{{.Callsign}}{{else}}<span style="color: var(--nord3);">—</span>{{end}}</td>
+            <td>
+                <span class="role-badge role-{{.Role}}">{{.Role}}</span>
+            </td>
+            <td>{{.JoinedAt}}</td>
+            <td {{if not $.IsAdmin}}style="display: none;"{{end}}>
+                <div class="action-buttons">
+                    {{if $.IsAdmin}}
+                    <!-- Role change form -->
+                    <form hx-post="/dashboard/pilots/{{.ID}}/role"
+                          hx-target="#pilots-container"
+                          hx-swap="innerHTML"
+                          hx-indicator="#global-spinner"
+                          style="display: flex; gap: 0.5rem; align-items: center;">
+                        <select name="role" class="role-select">
+                            <option value="pilot" {{if eq .Role "pilot"}}selected{{end}}>Pilot</option>
+                            <option value="staff" {{if eq .Role "staff"}}selected{{end}}>Staff</option>
+                            <option value="admin" {{if eq .Role "admin"}}selected{{end}}>Admin</option>
+                        </select>
+                        <button type="submit" class="btn-action">Update</button>
+                    </form>
+
+                    <!-- Remove button -->
+                    <form hx-delete="/dashboard/pilots/{{.ID}}"
+                          hx-confirm="Are you sure you want to remove this pilot?"
+                          hx-target="#pilots-container"
+                          hx-swap="innerHTML"
+                          hx-indicator="#global-spinner"
+                          style="display: inline;">
+                        <button type="submit" class="btn-action btn-remove">Remove</button>
+                    </form>
+                    {{end}}
+                </div>
+            </td>
+        </tr>
+        {{end}}
+    </tbody>
+</table>
+{{else}}
+<div class="empty-state">
+    <p>No pilots found for {{.ActiveVA.VAName}}</p>
+</div>
+{{end}}
+{{end}}

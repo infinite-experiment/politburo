@@ -61,6 +61,7 @@
 
     {{if or (eq .ActiveVA.Role "admin") (eq .ActiveVA.Role "staff")}}
     <a href="/dashboard/logbook" class="secondary-nav-item" data-page="logbook">Logbook</a>
+    <a href="/dashboard/pilots" class="secondary-nav-item" data-page="pilots">Pilots</a>
     {{end}}
 
     {{if eq .ActiveVA.Role "admin"}}

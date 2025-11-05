@@ -28,6 +28,9 @@ func RegisterUIRoutes(
 ) {
 	authHandler := vizbuUI.NewAuthHandler(sessionSvc, urlSigner, userRepo, vaRoleRepo, vaRepo)
 
+	// Initialize pilot management service
+	pilotMgmtSvc := services.NewPilotManagementService(vaRoleRepo)
+
 	// Import middleware
 	authMiddleware := middleware.AuthMiddleware(userRepo, nil, sessionSvc) // keysRepo is nil for UI routes
 
@@ -49,26 +52,48 @@ func RegisterUIRoutes(
 		// Apply authentication middleware to all dashboard routes
 		dashboard.Use(authMiddleware)
 
-		// Main dashboard page
+		// Main dashboard page (all authenticated users)
 		dashboard.Get("/", vizbuUI.DashboardHandler)
 
-		// Logbook page (role-checked in handler)
-		dashboard.Get("/logbook", vizbuUI.LogbookHandler)
-
-		// Logbook HTMX endpoints
-		dashboard.Get("/logbook/flights", func(w http.ResponseWriter, r *http.Request) {
-			vizbuUI.LogbookFlightsHandler(w, r, flightSvc)
-		})
-		dashboard.Get("/logbook/flight/{session_id}/{flight_id}/map", func(w http.ResponseWriter, r *http.Request) {
-			vizbuUI.FlightMapHandler(w, r, cache, liveAPI, flightSvc)
-		})
-		dashboard.Get("/logbook/pilots/search", func(w http.ResponseWriter, r *http.Request) {
-			vizbuUI.PilotSearchHandler(w, r, vaRoleRepo)
-		})
-		dashboard.Get("/logbook/map/reset", vizbuUI.MapResetHandler)
-
-		// HTMX VA switch endpoint
+		// HTMX VA switch endpoint (all authenticated users)
 		dashboard.Post("/switch-va", authHandler.SwitchVAHandler)
+
+		// Staff-only routes (staff + admin)
+		dashboard.Group(func(staff chi.Router) {
+			staff.Use(middleware.IsStaffMiddleware())
+
+			// Logbook page and endpoints (staff + admin)
+			staff.Get("/logbook", vizbuUI.LogbookHandler)
+			staff.Get("/logbook/flights", func(w http.ResponseWriter, r *http.Request) {
+				vizbuUI.LogbookFlightsHandler(w, r, flightSvc)
+			})
+			staff.Get("/logbook/flight/{session_id}/{flight_id}/map", func(w http.ResponseWriter, r *http.Request) {
+				vizbuUI.FlightMapHandler(w, r, cache, liveAPI, flightSvc)
+			})
+			staff.Get("/logbook/pilots/search", func(w http.ResponseWriter, r *http.Request) {
+				vizbuUI.PilotSearchHandler(w, r, vaRoleRepo)
+			})
+			staff.Get("/logbook/map/reset", vizbuUI.MapResetHandler)
+
+			// Pilots page and list endpoint (staff + admin can view)
+			staff.Get("/pilots", vizbuUI.PilotsHandler)
+			staff.Get("/pilots/list", func(w http.ResponseWriter, r *http.Request) {
+				vizbuUI.PilotsListHandler(w, r, pilotMgmtSvc)
+			})
+
+			// Admin-only routes (admin only)
+			staff.Group(func(admin chi.Router) {
+				admin.Use(middleware.IsAdminMiddleware())
+
+				// Pilots management (admin only)
+				admin.Post("/pilots/{pilot_id}/role", func(w http.ResponseWriter, r *http.Request) {
+					vizbuUI.UpdatePilotRoleHandler(w, r, pilotMgmtSvc)
+				})
+				admin.Delete("/pilots/{pilot_id}", func(w http.ResponseWriter, r *http.Request) {
+					vizbuUI.RemovePilotHandler(w, r, pilotMgmtSvc)
+				})
+			})
+		})
 	})
 
 	// UI API routes

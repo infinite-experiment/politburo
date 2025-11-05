@@ -104,7 +104,8 @@ func (r *VAUserRoleRepository) Create(ctx context.Context, role *models.UserVARo
 
 // Update updates an existing VA user role
 func (r *VAUserRoleRepository) Update(ctx context.Context, role *models.UserVARole) error {
-	err := r.db.WithContext(ctx).Save(role).Error
+	// Omit associations to avoid trying to update User and VA tables
+	err := r.db.WithContext(ctx).Omit("User", "VA").Save(role).Error
 	if err != nil {
 		return fmt.Errorf("failed to update VA user role: %w", err)
 	}
