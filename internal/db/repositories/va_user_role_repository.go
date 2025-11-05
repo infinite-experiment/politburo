@@ -147,3 +147,27 @@ func (r *VAUserRoleRepository) GetByDiscordIDs(ctx context.Context, discordUserI
 
 	return &role, nil
 }
+
+// GetByCallsignAndVAID retrieves a user's role by callsign and VA ID, optionally excluding a specific ID
+func (r *VAUserRoleRepository) GetByCallsignAndVAID(ctx context.Context, callsign, vaID, excludeID string) (*models.UserVARole, error) {
+	var role models.UserVARole
+
+	query := r.db.WithContext(ctx).
+		Where("va_id = ? AND callsign = ? AND is_active = ?", vaID, callsign, true)
+
+	// Exclude a specific role ID if provided (used to avoid matching current pilot)
+	if excludeID != "" {
+		query = query.Where("id != ?", excludeID)
+	}
+
+	err := query.First(&role).Error
+
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, nil // Not found is OK, return nil without error
+		}
+		return nil, fmt.Errorf("failed to check callsign uniqueness: %w", err)
+	}
+
+	return &role, nil
+}

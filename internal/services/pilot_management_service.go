@@ -3,6 +3,8 @@ package services
 import (
 	"context"
 	"fmt"
+	"regexp"
+	"strings"
 
 	"infinite-experiment/politburo/internal/constants"
 	"infinite-experiment/politburo/internal/db/repositories"
@@ -100,6 +102,59 @@ func (s *PilotManagementService) UpdatePilotRole(
 	pilot.Role = constants.VARole(newRole)
 	if err := s.vaRoleRepo.Update(ctx, pilot); err != nil {
 		return fmt.Errorf("failed to update pilot role: %w", err)
+	}
+
+	return nil
+}
+
+// UpdatePilotCallsign updates a pilot's callsign with validation
+func (s *PilotManagementService) UpdatePilotCallsign(
+	ctx context.Context,
+	vaID string,
+	pilotID string,
+	newCallsign string,
+	requestorRole constants.VARole,
+) error {
+	// Staff and admins can change callsigns
+	if requestorRole != constants.RoleAirlineManager && requestorRole != constants.RoleAdmin {
+		return fmt.Errorf("only staff and admins can change callsigns")
+	}
+
+	// Trim whitespace
+	newCallsign = strings.TrimSpace(newCallsign)
+
+	// Validate callsign format (1-5 digits only, matching Discord bot validation)
+	callsignRegex := regexp.MustCompile(`^\d{1,5}$`)
+	if newCallsign != "" && !callsignRegex.MatchString(newCallsign) {
+		return fmt.Errorf("callsign must be 1-5 digits only")
+	}
+
+	// Get the pilot's current data
+	pilot, err := s.vaRoleRepo.GetByID(ctx, pilotID)
+	if err != nil {
+		return fmt.Errorf("pilot not found: %w", err)
+	}
+
+	// Verify pilot belongs to this VA
+	if pilot.VAID != vaID {
+		return fmt.Errorf("pilot does not belong to this VA")
+	}
+
+	// Check uniqueness if callsign is not empty
+	if newCallsign != "" {
+		existing, err := s.vaRoleRepo.GetByCallsignAndVAID(ctx, newCallsign, vaID, pilotID)
+		if err != nil {
+			return fmt.Errorf("failed to check callsign uniqueness: %w", err)
+		}
+		if existing != nil {
+			return fmt.Errorf("callsign already in use")
+		}
+	}
+
+	// Update the callsign
+	pilot.Callsign = newCallsign
+	if err := s.vaRoleRepo.Update(ctx, pilot); err != nil {
+		return fmt.Errorf("failed to update pilot callsign: %w", err)
 	}
 
 	return nil

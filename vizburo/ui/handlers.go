@@ -710,6 +710,73 @@ func UpdatePilotRoleHandler(
 	}
 }
 
+// UpdatePilotCallsignHandler updates a pilot's callsign (HTMX endpoint)
+// Role check: Staff middleware ensures staff or admin can access this
+func UpdatePilotCallsignHandler(
+	w http.ResponseWriter,
+	r *http.Request,
+	pilotMgmtSvc *services.PilotManagementService,
+) {
+	// Get session data (guaranteed by auth middleware)
+	sessionDataInterface := auth.GetSessionData(r.Context())
+	sessionData, ok := sessionDataInterface.(*common.SessionData)
+	if !ok {
+		http.Error(w, "Invalid session data", http.StatusInternalServerError)
+		return
+	}
+
+	activeVA := sessionData.GetActiveVA()
+	if activeVA == nil {
+		http.Error(w, "No active VA found", http.StatusInternalServerError)
+		return
+	}
+
+	// Get pilot ID from URL parameter
+	pilotID := chi.URLParam(r, "pilot_id")
+	if pilotID == "" {
+		http.Error(w, "Missing pilot_id in URL", http.StatusBadRequest)
+		return
+	}
+
+	// Get new callsign from form data
+	newCallsign := r.FormValue("callsign")
+
+	// Update callsign via service
+	err := pilotMgmtSvc.UpdatePilotCallsign(
+		r.Context(),
+		activeVA.VAID,
+		pilotID,
+		newCallsign,
+		constants.VARole(activeVA.Role),
+	)
+	if err != nil {
+		http.Error(w, "Failed to update callsign: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// Re-fetch pilots and render updated table
+	pilots, err := pilotMgmtSvc.GetPilotsByVAID(
+		r.Context(),
+		activeVA.VAID,
+		constants.VARole(activeVA.Role),
+	)
+	if err != nil {
+		http.Error(w, "Failed to fetch updated pilots", http.StatusInternalServerError)
+		return
+	}
+
+	data := map[string]interface{}{
+		"Pilots":   pilots,
+		"ActiveVA": activeVA,
+		"IsAdmin":  activeVA.Role == "admin",
+	}
+
+	if err := RenderPartial(w, "partials/pilots-table.html", data); err != nil {
+		http.Error(w, "Error rendering pilots table", http.StatusInternalServerError)
+		return
+	}
+}
+
 // RemovePilotHandler removes a pilot from the VA (HTMX endpoint)
 // Role check: Admin middleware ensures only admins can access this
 func RemovePilotHandler(

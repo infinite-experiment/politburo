@@ -93,6 +93,11 @@ func RegisterUIRoutes(
 				vizbuUI.PilotsListHandler(w, r, pilotMgmtSvc)
 			})
 
+			// Callsign update (staff + admin can update)
+			staff.Post("/pilots/{pilot_id}/callsign", func(w http.ResponseWriter, r *http.Request) {
+				vizbuUI.UpdatePilotCallsignHandler(w, r, pilotMgmtSvc)
+			})
+
 			// Admin-only routes (admin only)
 			staff.Group(func(admin chi.Router) {
 				admin.Use(middleware.IsAdminMiddleware())
